@@ -20,7 +20,7 @@ HOST = "127.0.0.1"
 PUERTO = "3306"
 BASE_DE_DATOS = "Dashboard_KPI"
 NOMBRE_TABLA = "consolidado_fullstack"
-RUTA_ARCHIVO = r"C:\Users\Haintech\Desktop\Consolidado_Ordenes_PowerQuery\FullStack_Consolidado.xlsx"
+RUTA_ARCHIVO = "FullStack_Consolidado.xlsx"
 HOJA_DATOS = "Consolidado FullStack"
 try:
     # Intenta la configuración ideal para sistemas Linux
