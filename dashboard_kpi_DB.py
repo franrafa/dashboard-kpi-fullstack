@@ -23,9 +23,16 @@ NOMBRE_TABLA = "consolidado_fullstack"
 RUTA_ARCHIVO = r"C:\Users\Haintech\Desktop\Consolidado_Ordenes_PowerQuery\FullStack_Consolidado.xlsx"
 HOJA_DATOS = "Consolidado FullStack"
 try:
+    # Intenta la configuración ideal para sistemas Linux
     locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
 except locale.Error:
-    locale.setlocale(locale.LC_TIME, 'Spanish')
+    try:
+        # Si falla, intenta la configuración para Windows
+        locale.setlocale(locale.LC_TIME, 'Spanish')
+    except locale.Error:
+        # Si todo falla, imprime una advertencia y continúa con el locale por defecto (inglés)
+        print("Advertencia: No se pudo establecer el locale a español. Los meses se mostrarán en inglés.")
+        pass # La aplicación NO se detendrá
 COLUMNA_FECHA = "FECHA"
 COLUMNA_ANALISTA = "EJECUTIVO"
 COLUMNA_ORDEN = "NUMERO_DE_PEDIDO"
