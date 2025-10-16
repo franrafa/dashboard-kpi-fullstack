@@ -16,7 +16,7 @@ import traceback
 # --- 1. CONFIGURACIÓN GENERAL ---
 USUARIO = os.environ.get("root")
 CONTRASENA = os.environ.get("nhdHlnglnSsIekEJJDAbykayPacNIBhB")
-HOST = os.environ.get("hortline.proxy.rlwy.net")
+HOST = os.environ.get("shortline.proxy.rlwy.net")
 PUERTO = os.environ.get("54379")
 BASE_DE_DATOS = os.environ.get("railway")
 NOMBRE_TABLA = "consolidado_fullstack"
