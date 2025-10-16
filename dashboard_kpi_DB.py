@@ -14,9 +14,9 @@ from sqlalchemy.exc import SQLAlchemyError
 import traceback
 
 # --- 1. CONFIGURACIÓN GENERAL ---
+# Las variables de entorno se leen ahora dentro de la función
 NOMBRE_TABLA = "consolidado_fullstack"
 HOJA_DATOS = "Consolidado FullStack"
-
 try:
     locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
 except locale.Error:
@@ -25,13 +25,21 @@ except locale.Error:
     except locale.Error:
         print("Advertencia: No se pudo establecer el locale a español. Los meses se mostrarán en inglés.")
         pass
-
 COLUMNA_FECHA = "FECHA"
 COLUMNA_ANALISTA = "EJECUTIVO"
 COLUMNA_ORDEN = "NUMERO_DE_PEDIDO"
 COLUMNA_STATUS = "STATUS_REAL"
 COLUMNA_TORRE = "TORRE"
 VALID_USERNAME_PASSWORD_PAIRS = {'haintech': 'dashboard2025'}
+
+# --- EJECUTIVOS PARA EL RANKING KPI ---
+EJECUTIVOS_KPI_RANKING = [
+    "Miguel Mantilla",
+    "Miguel Aravena",
+    "Nilsson Diaz",
+    "Francisco Narvaez",
+    "Gia Marin",
+]
 
 
 # --- 2. FUNCIÓN DE CARGA DE DATOS (OPTIMIZADA) ---
@@ -74,13 +82,11 @@ def cargar_datos_desde_db():
 # --- 3. INICIALIZACIÓN DE LA APLICACIÓN DASH ---
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LUX], suppress_callback_exceptions=True)
 server = app.server
-# Usar una variable de entorno para la secret key es una buena práctica de seguridad
 server.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 auth = dash_auth.BasicAuth(app, VALID_USERNAME_PASSWORD_PAIRS)
 
 # --- Carga inicial de datos ---
 try:
-    # Usamos la nueva función rápida
     df_principal = cargar_datos_desde_db()
     meses_disponibles = sorted(df_principal['Mes'].unique(), key=lambda m: pd.to_datetime(f'01-{m}-2025', format='%d-%B-%Y').month)
     week_map = df_principal[['Semana_Num', 'WeekLabel']].drop_duplicates().sort_values('Semana_Num')
@@ -174,7 +180,20 @@ if datos_cargados_correctamente:
                 )], width=12)], className="mb-4"), 
                 dbc.Row([dbc.Col([html.H4("Porcentaje de Resolutividad Diario por Ejecutivo", className="border-bottom pb-2 mb-3"), dash_table.DataTable(id='tabla-resumen-ejecutivo-porcentaje', style_table={'overflowX': 'auto'}, style_header={'backgroundColor': '#e3f2fd'}, style_cell={'textAlign': 'center', 'minWidth': '120px'}, style_cell_conditional=[{'if': {'column_id': COLUMNA_ANALISTA}, 'textAlign': 'left', 'fontWeight': 'bold', 'minWidth': '180px'}, {'if': {'column_id': 'Total General'}, 'fontWeight': 'bold', 'backgroundColor': '#e3f2fd'}])], width=12)], className="mb-4")
             ]),
-            dbc.Tab(label="Gráficos", children=[dbc.Row(id='tarjetas-kpi-graficos', className="my-4"), dbc.Row([dbc.Col(dcc.Graph(id='grafico-torta-torre'), md=6), dbc.Col(dcc.Graph(id='grafico-barras-resolutividad'), md=6)], className="my-4"), dbc.Row([dbc.Col(dcc.Graph(id='grafico-volumen-ejecutivo'), md=6), dbc.Col(dcc.Graph(id='grafico-composicion-status'), md=6)], className="my-4")]),
+            dbc.Tab(label="Gráficos", children=[
+                dbc.Row(id='tarjetas-kpi-graficos', className="my-4"), 
+                dbc.Row([
+                    dbc.Col(dcc.Graph(id='grafico-torta-torre'), md=6), 
+                    dbc.Col(dcc.Graph(id='grafico-barras-resolutividad'), md=6)
+                ], className="my-4"), 
+                dbc.Row([
+                    dbc.Col(dcc.Graph(id='grafico-volumen-ejecutivo'), md=6), 
+                    dbc.Col(dcc.Graph(id='grafico-composicion-status'), md=6)
+                ], className="my-4"),
+                dbc.Row([
+                    dbc.Col(id='kpi-ranking-container', md=6) 
+                ], className="my-4", justify="center") # Centrar la tarjeta si está sola
+            ]),
             dbc.Tab(label="Descargar", children=[
                 dbc.Row([
                     dbc.Col([
@@ -207,7 +226,6 @@ else:
     app.layout = dbc.Container([
         dbc.Alert(error_mensaje, color="danger", className="mt-4")
     ])
-
 
 # --- 5. LÓGICA DE INTERACTIVIDAD (CALLBACKS) ---
 
@@ -295,9 +313,13 @@ def crear_tabla_porcentaje_corregido(df, index_col, date_range=None):
     Output('grafico-barras-resolutividad', 'figure'),
     Output('grafico-volumen-ejecutivo', 'figure'),
     Output('grafico-composicion-status', 'figure'),
+    Output('kpi-ranking-container', 'children'),
     Input('store-main-data', 'data'),
-    Input('filtro-mes', 'value'), Input('filtro-quincena', 'value'), Input('filtro-semana', 'value'),
-    Input('filtro-torre', 'value'), Input('filtro-ejecutivo', 'value'),
+    Input('filtro-mes', 'value'), 
+    Input('filtro-quincena', 'value'), 
+    Input('filtro-semana', 'value'),
+    Input('filtro-torre', 'value'), 
+    Input('filtro-ejecutivo', 'value'),
     State('modo-filtro-tiempo', 'value')
 )
 def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, ejecutivos, modo_tiempo):
@@ -306,7 +328,6 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         
     df_principal = pd.read_json(io.StringIO(json_data), orient='split')
     df_principal[COLUMNA_FECHA] = pd.to_datetime(df_principal[COLUMNA_FECHA])
-    
     dff = df_principal.copy()
     
     if meses: dff = dff[dff['Mes'].isin(meses)]
@@ -323,8 +344,8 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         no_data_msg = [dbc.Col(dbc.Alert("No hay datos para mostrar con los filtros seleccionados.", color="warning"))]
         return (empty_df_dict, empty_cols, empty_df_dict, empty_cols, empty_df_dict, empty_cols,
                 empty_df_dict, empty_cols, empty_df_dict, empty_cols, no_data_msg, no_data_msg, no_data_msg,
-                {}, {}, {}, {})
-    
+                {}, {}, {}, {}, no_data_msg)
+
     all_months_ordered_local = sorted(df_principal['Mes'].unique(), key=lambda m: pd.to_datetime(f'01-{m}-2025', format='%d-%B-%Y').month)
     
     pivot_mensual = pd.pivot_table(dff, values=COLUMNA_ORDEN, index=[COLUMNA_TORRE, COLUMNA_ANALISTA], columns='Mes', aggfunc='count', fill_value=0)
@@ -400,6 +421,23 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
     fig_composicion_status = px.bar(df_status_exec_chart, x=COLUMNA_ANALISTA, y='Cantidad', color=COLUMNA_STATUS, title='Composición de Status por Ejecutivo (Cantidad)', template='plotly_white', text_auto=True)
     fig_composicion_status.update_layout(barmode='stack', xaxis_title=None, yaxis_title='Cantidad de Gestiones', title_x=0.5, xaxis={'categoryorder':'array', 'categoryarray': total_volume_order})
     
+    df_kpi = dff[dff[COLUMNA_ANALISTA].isin(EJECUTIVOS_KPI_RANKING)]
+    if not df_kpi.empty:
+        total_ordenes = df_kpi.groupby(COLUMNA_ANALISTA)[COLUMNA_ORDEN].count()
+        ordenes_corregidas = df_kpi[df_kpi[COLUMNA_STATUS] == 'Corregido'].groupby(COLUMNA_ANALISTA)[COLUMNA_ORDEN].count()
+        kpi_ranking = (ordenes_corregidas / total_ordenes).fillna(0).sort_values(ascending=False)
+        ranking_items = [html.H4("Ranking de Resolutividad (KPI)", className="card-title")]
+        for i, (ejecutivo, score) in enumerate(kpi_ranking.items()):
+            color = "success" if i == 0 else "warning" if i == 1 else "secondary"
+            ranking_items.append(
+                dbc.ListGroupItem([
+                    html.Span(f"{i+1}. {ejecutivo}", className="fw-bold"),
+                    dbc.Badge(f"{score:.2%}", color=color, pill=True, className="ms-auto")
+                ], className="d-flex justify-content-between align-items-center"))
+        kpi_ranking_card = dbc.Card(dbc.CardBody(dbc.ListGroup(ranking_items, flush=True)))
+    else:
+        kpi_ranking_card = dbc.Alert("No hay datos para generar el ranking KPI con los filtros seleccionados.", color="info")
+    
     return (
         data_mensual, cols_mensual, 
         data_torre, cols_torre, 
@@ -407,7 +445,8 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         data_ejecutivo_conteo, cols_ejecutivo_conteo, 
         data_ejecutivo_porcentaje, cols_ejecutivo_porcentaje, 
         tarjetas, tarjetas, tarjetas, 
-        fig_torta_torre, fig_bar_resolutividad, fig_volumen_ejec, fig_composicion_status
+        fig_torta_torre, fig_bar_resolutividad, fig_volumen_ejec, fig_composicion_status,
+        kpi_ranking_card
     )
 
 @callback(
@@ -494,6 +533,7 @@ def download_all_in_one_excel(n_clicks, json_raw, json_conteo, json_porcentaje):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"reporte_completo_{timestamp}.xlsx"
     return dcc.send_bytes(output.read(), filename)
+
 
 # --- 6. INICIAR EL SERVIDOR ---
 if __name__ == '__main__':
