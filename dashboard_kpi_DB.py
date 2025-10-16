@@ -14,25 +14,18 @@ from sqlalchemy.exc import SQLAlchemyError
 import traceback
 
 # --- 1. CONFIGURACIÓN GENERAL ---
-USUARIO = os.environ.get("USUARIO")
-CONTRASENA = os.environ.get("CONTRASENA")
-HOST = os.environ.get("HOST")
-PUERTO = os.environ.get("PUERTO")
-BASE_DE_DATOS = os.environ.get("BASE_DE_DATOS")
 NOMBRE_TABLA = "consolidado_fullstack"
-RUTA_ARCHIVO = "FullStack_Consolidado.xlsx"
 HOJA_DATOS = "Consolidado FullStack"
+
 try:
-    # Intenta la configuración ideal para sistemas Linux
     locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
 except locale.Error:
     try:
-        # Si falla, intenta la configuración para Windows
         locale.setlocale(locale.LC_TIME, 'Spanish')
     except locale.Error:
-        # Si todo falla, imprime una advertencia y continúa con el locale por defecto (inglés)
         print("Advertencia: No se pudo establecer el locale a español. Los meses se mostrarán en inglés.")
-        pass # La aplicación NO se detendrá
+        pass
+
 COLUMNA_FECHA = "FECHA"
 COLUMNA_ANALISTA = "EJECUTIVO"
 COLUMNA_ORDEN = "NUMERO_DE_PEDIDO"
@@ -41,21 +34,29 @@ COLUMNA_TORRE = "TORRE"
 VALID_USERNAME_PASSWORD_PAIRS = {'haintech': 'dashboard2025'}
 
 
-# --- 2. FUNCIÓN CENTRAL DE CARGA Y PROCESAMIENTO DE DATOS ---
-def actualizar_y_cargar_datos_desde_excel():
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] Iniciando proceso de actualización...")
-    df_excel = pd.read_excel(RUTA_ARCHIVO, sheet_name=HOJA_DATOS)
-    df_excel.columns = [
-        col.replace(' ', '_').replace('á', 'a').replace('é', 'e').replace('í', 'i')
-           .replace('ó', 'o').replace('ú', 'u').replace('ñ', 'n').upper()
-        for col in df_excel.columns
-    ]
+# --- 2. FUNCIÓN DE CARGA DE DATOS (OPTIMIZADA) ---
+def cargar_datos_desde_db():
+    """
+    Esta función es rápida. Solo lee los datos desde la base de datos en la nube.
+    """
+    # --- Lee las variables de entorno justo cuando se necesitan ---
+    USUARIO = os.environ.get("USUARIO")
+    CONTRASENA = os.environ.get("CONTRASENA")
+    HOST = os.environ.get("HOST")
+    PUERTO = os.environ.get("PUERTO")
+    BASE_DE_DATOS = os.environ.get("BASE_DE_DATOS")
+
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Conectando a la base de datos en la nube...")
+    
     cadena_conexion = f"mysql+pymysql://{USUARIO}:{CONTRASENA}@{HOST}:{PUERTO}/{BASE_DE_DATOS}"
-    engine = create_engine(cadena_conexion)
-    with engine.connect() as connection:
-        df_excel.to_sql(name=NOMBRE_TABLA, con=connection, if_exists='replace', index=False, chunksize=1000)
+    engine = create_engine(cadena_conexion, pool_recycle=3600) # pool_recycle es importante para conexiones en la nube
+
     with engine.connect() as connection:
         df_dashboard = pd.read_sql_table(NOMBRE_TABLA, connection)
+    
+    print(f"Se han leído {len(df_dashboard)} filas de la base de datos.")
+
+    # --- El resto del procesamiento es el mismo ---
     df_dashboard[COLUMNA_FECHA] = pd.to_datetime(df_dashboard[COLUMNA_FECHA], errors='coerce')
     df_dashboard.dropna(subset=[COLUMNA_FECHA, COLUMNA_ANALISTA, COLUMNA_TORRE, COLUMNA_STATUS], inplace=True)
     df_dashboard = df_dashboard[df_dashboard[COLUMNA_FECHA].dt.month >= 8]
@@ -66,27 +67,29 @@ def actualizar_y_cargar_datos_desde_excel():
     df_dashboard['WeekStartDate'] = pd.to_datetime(df_dashboard['Year'].astype(str) + df_dashboard['Semana_Num'].astype(str) + '1', format='%G%V%u')
     df_dashboard['WeekEndDate'] = df_dashboard['WeekStartDate'] + pd.to_timedelta('6 days')
     df_dashboard['WeekLabel'] = "Semana " + df_dashboard['Semana_Num'].astype(str) + " (" + df_dashboard['WeekStartDate'].dt.strftime('%d %b') + " - " + df_dashboard['WeekEndDate'].dt.strftime('%d %b') + ")"
-    print("Procesamiento de datos para el dashboard completado.")
+    
     return df_dashboard
 
 
 # --- 3. INICIALIZACIÓN DE LA APLICACIÓN DASH ---
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LUX], suppress_callback_exceptions=True)
 server = app.server
-server.secret_key = os.urandom(24)
+# Usar una variable de entorno para la secret key es una buena práctica de seguridad
+server.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 auth = dash_auth.BasicAuth(app, VALID_USERNAME_PASSWORD_PAIRS)
 
 # --- Carga inicial de datos ---
 try:
-    df_principal = actualizar_y_cargar_datos_desde_excel()
+    # Usamos la nueva función rápida
+    df_principal = cargar_datos_desde_db()
     meses_disponibles = sorted(df_principal['Mes'].unique(), key=lambda m: pd.to_datetime(f'01-{m}-2025', format='%d-%B-%Y').month)
     week_map = df_principal[['Semana_Num', 'WeekLabel']].drop_duplicates().sort_values('Semana_Num')
     semanas_disponibles_options = week_map.apply(lambda row: {'label': row['WeekLabel'], 'value': row['Semana_Num']}, axis=1).tolist()
     ejecutivos_disponibles = sorted(df_principal[COLUMNA_ANALISTA].unique())
     torres_disponibles = sorted(df_principal[COLUMNA_TORRE].unique())
     datos_cargados_correctamente = True
-    initial_load_time_str = f"Datos cargados desde Excel y DB a las: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
-except (SQLAlchemyError, FileNotFoundError, Exception) as e:
+    initial_load_time_str = f"Datos cargados desde DB a las: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+except Exception as e:
     error_mensaje = f"Ocurrió un error crítico durante la carga inicial de datos: {e}"
     datos_cargados_correctamente = False
     df_principal = pd.DataFrame()
@@ -205,6 +208,7 @@ else:
         dbc.Alert(error_mensaje, color="danger", className="mt-4")
     ])
 
+
 # --- 5. LÓGICA DE INTERACTIVIDAD (CALLBACKS) ---
 
 @callback(
@@ -215,9 +219,9 @@ else:
 )
 def auto_update_data(n):
     try:
-        new_df = actualizar_y_cargar_datos_desde_excel()
+        new_df = cargar_datos_desde_db()
         new_data_json = new_df.to_json(date_format='iso', orient='split')
-        update_time_str = f"Datos actualizados desde Excel y DB: {datetime.now().strftime('%H:%M:%S')}"
+        update_time_str = f"Datos actualizados desde DB: {datetime.now().strftime('%H:%M:%S')}"
         return new_data_json, update_time_str
     except Exception as e:
         print(f"Error durante la actualización automática de datos: {e}")
@@ -490,7 +494,6 @@ def download_all_in_one_excel(n_clicks, json_raw, json_conteo, json_porcentaje):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"reporte_completo_{timestamp}.xlsx"
     return dcc.send_bytes(output.read(), filename)
-
 
 # --- 6. INICIAR EL SERVIDOR ---
 if __name__ == '__main__':
