@@ -14,11 +14,11 @@ from sqlalchemy.exc import SQLAlchemyError
 import traceback
 
 # --- 1. CONFIGURACIÓN GENERAL ---
-USUARIO = os.environ.get("root")
-CONTRASENA = os.environ.get("nhdHlnglnSsIekEJJDAbykayPacNIBhB")
-HOST = os.environ.get("shortline.proxy.rlwy.net")
-PUERTO = os.environ.get("54379")
-BASE_DE_DATOS = os.environ.get("railway")
+USUARIO = os.environ.get("USUARIO")
+CONTRASENA = os.environ.get("CONTRASENA")
+HOST = os.environ.get("HOST")
+PUERTO = os.environ.get("PUERTO")
+BASE_DE_DATOS = os.environ.get("BASE_DE_DATOS")
 NOMBRE_TABLA = "consolidado_fullstack"
 RUTA_ARCHIVO = "FullStack_Consolidado.xlsx"
 HOJA_DATOS = "Consolidado FullStack"
