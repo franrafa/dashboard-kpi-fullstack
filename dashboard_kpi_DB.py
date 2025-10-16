@@ -57,7 +57,12 @@ def cargar_datos_desde_db():
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Conectando a la base de datos en la nube...")
     
     cadena_conexion = f"mysql+pymysql://{USUARIO}:{CONTRASENA}@{HOST}:{PUERTO}/{BASE_DE_DATOS}"
-    engine = create_engine(cadena_conexion, pool_recycle=3600) # pool_recycle es importante para conexiones en la nube
+    
+    engine = create_engine(
+    cadena_conexion,
+    pool_recycle=3600,
+    connect_args={'connect_timeout': 60} # Aumenta el timeout a 60 segundos
+)
 
     with engine.connect() as connection:
         df_dashboard = pd.read_sql_table(NOMBRE_TABLA, connection)
