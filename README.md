@@ -1,4 +1,5 @@
-Diagrama del Flujo del Sistema de TI
+                                                                                           Diagrama del Flujo del Sistema de TI
+                                                                                           
 Componentes del Sistema
 Tu PC (Desarrollador) 💻: Es tu entorno local donde actualizas el archivo Excel y gestionas el código fuente.
 
