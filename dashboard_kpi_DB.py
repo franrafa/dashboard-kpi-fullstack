@@ -114,6 +114,7 @@ if datos_cargados_correctamente:
         dcc.Store(id='store-download-raw-data'),
         dcc.Store(id='store-kpi-resolutividad-data'),
         dcc.Store(id='store-kpi-cantidad-data'),
+        dcc.Store(id='store-filtered-data'), # Nuevo store para el consolidado filtrado
         
         dbc.Row(dbc.Col(html.H1("Dashboard Consolidado FullStack", className="text-center text-primary my-4"))),
         dbc.Card(dbc.CardBody([
@@ -246,6 +247,7 @@ def crear_tabla_porcentaje_corregido(df, index_col, date_range=None):
     Output('kpi-quantity-ranking-container', 'children'),
     Output('store-kpi-resolutividad-data', 'data'),
     Output('store-kpi-cantidad-data', 'data'),
+    Output('store-filtered-data', 'data'), # Nuevo Output
     Input('store-main-data', 'data'),
     Input('filtro-mes', 'value'), 
     Input('filtro-quincena', 'value'), 
@@ -280,7 +282,7 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
                 empty_df_dict, empty_cols, empty_df_dict, empty_cols, 
                 no_data_msg, no_data_msg, no_data_msg,
                 empty_fig, empty_fig, empty_fig, empty_fig, 
-                no_data_msg, no_data_msg, empty_data, empty_data) 
+                no_data_msg, no_data_msg, empty_data, empty_data, empty_data) 
 
     all_months_ordered_local = sorted(df_principal['Mes'].unique(), key=lambda m: pd.to_datetime(f'01-{m}-2025', format='%d-%B-%Y').month)
     
@@ -395,14 +397,15 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
             dbc.ListGroup(ranking_items, flush=True, className="border-0")
         ]), className="shadow-sm border-0 rounded-lg")
         
-        df_kpi_cantidad = pd.DataFrame({
-            'Ejecutivo': kpi_ranking.index,
+        # --- LÓGICA CORREGIDA PARA EL DETALLE DE GESTIONES ---
+        df_kpi_cantidad_detalle = pd.DataFrame({
+            'Ejecutivo': kpi_ranking.index, # Usar el orden del ranking de resolutividad
             'Corregidas': ordenes_corregidas_kpi.reindex(kpi_ranking.index, fill_value=0).values,
             'Asignadas': total_ordenes_kpi.reindex(kpi_ranking.index, fill_value=0).values
         })
         
         quantity_items = []
-        for index, row in df_kpi_cantidad.iterrows():
+        for index, row in df_kpi_cantidad_detalle.iterrows():
             ejecutivo = row['Ejecutivo']
             corregidas = row['Corregidas']
             asignadas = row['Asignadas']
@@ -424,12 +427,15 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
             dbc.ListGroup(quantity_items, flush=True, className="border-0")
         ]), className="shadow-sm border-0 rounded-lg")
         
+        # Preparar datos para descarga
+        df_kpi_cantidad_download = df_kpi_cantidad_detalle
+        
     else:
         alert_msg = dbc.Alert("No hay datos para generar el ranking KPI con los ejecutivos y filtros seleccionados.", color="info")
         kpi_ranking_card = alert_msg
         kpi_quantity_card = alert_msg
         df_kpi_resolutividad = pd.DataFrame()
-        df_kpi_cantidad = pd.DataFrame()
+        df_kpi_cantidad_download = pd.DataFrame() # DataFrame vacío
     
     return (
         data_mensual, cols_mensual, 
@@ -442,7 +448,8 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         kpi_ranking_card,
         kpi_quantity_card,
         df_kpi_resolutividad.to_json(orient='split', index=False),
-        df_kpi_cantidad.to_json(orient='split', index=False)
+        df_kpi_cantidad_download.to_json(orient='split', index=False),
+        dff.to_json(date_format='iso', orient='split')
     )
 
 @callback(
@@ -541,28 +548,36 @@ def download_all_in_one_excel(n_clicks, json_raw, json_conteo, json_porcentaje):
     Input("btn-download-ranking", "n_clicks"),
     State('store-kpi-resolutividad-data', 'data'),
     State('store-kpi-cantidad-data', 'data'),
+    State('store-filtered-data', 'data'), # Nuevo State
     prevent_initial_call=True,
 )
-def download_ranking_excel(n_clicks, json_resolutividad, json_cantidad):
-    if not n_clicks or not json_resolutividad or not json_cantidad:
+def download_ranking_excel(n_clicks, json_resolutividad, json_cantidad, json_consolidado):
+    if not n_clicks or not json_resolutividad or not json_cantidad or not json_consolidado:
         raise PreventUpdate
     
     df_resolutividad = pd.read_json(io.StringIO(json_resolutividad), orient='split')
     df_cantidad = pd.read_json(io.StringIO(json_cantidad), orient='split')
+    df_consolidado = pd.read_json(io.StringIO(json_consolidado), orient='split')
     
     if not df_resolutividad.empty:
         df_resolutividad['Resolutividad'] = pd.to_numeric(df_resolutividad['Resolutividad'])
         df_resolutividad['Resolutividad'] = df_resolutividad['Resolutividad'].apply(lambda x: f"{x:.2%}")
 
+    if not df_consolidado.empty:
+        df_consolidado[COLUMNA_FECHA] = pd.to_datetime(df_consolidado[COLUMNA_FECHA]).dt.date
+        cols_to_drop = ['Year', 'Semana_Num', 'WeekStartDate', 'WeekEndDate', 'WeekLabel']
+        df_consolidado = df_consolidado.drop(columns=[col for col in cols_to_drop if col in df_consolidado.columns])
+
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_resolutividad.to_excel(writer, sheet_name='Ranking Resolutividad', index=False)
         df_cantidad.to_excel(writer, sheet_name='Ranking Cantidad', index=False)
+        df_consolidado.to_excel(writer, sheet_name='Consolidado Filtrado', index=False)
     
     output.seek(0)
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"ranking_kpi_{timestamp}.xlsx"
+    filename = f"ranking_kpi_completo_{timestamp}.xlsx"
     
     return dcc.send_bytes(output.read(), filename=filename)
 
