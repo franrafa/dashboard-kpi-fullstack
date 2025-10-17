@@ -37,7 +37,9 @@ EJECUTIVOS_KPI_RANKING = [
     "Miguel Aravena",
     "Nilsson Diaz",
     "Francisco Narvaez",
+    "Carlos Quezada",
     "Gia Marin",
+    "Marcos Coyan"
 ]
 
 
