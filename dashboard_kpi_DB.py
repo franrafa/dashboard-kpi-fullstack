@@ -394,7 +394,6 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         ]), className="shadow-sm border-0 rounded-lg")
         
         # --- LÓGICA CORREGIDA PARA EL DETALLE DE GESTIONES ---
-        # Ordenamos por el número de órdenes CORREGIDAS
         kpi_details_sorted = ordenes_corregidas_kpi.reindex(total_ordenes_kpi.index, fill_value=0).sort_values(ascending=False).astype(int)
 
         df_kpi_cantidad_detalle = pd.DataFrame({
