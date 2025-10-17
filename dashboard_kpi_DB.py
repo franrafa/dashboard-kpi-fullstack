@@ -394,26 +394,30 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         ]), className="shadow-sm border-0 rounded-lg")
         
         # --- LÓGICA CORREGIDA PARA EL DETALLE DE GESTIONES ---
-        kpi_details = total_ordenes_kpi.sort_values(ascending=False)
-        
-        df_kpi_cantidad_detalle = pd.DataFrame({
-            'Ejecutivo': kpi_details.index,
-            'Asignadas': kpi_details.values,
-            'Corregidas': ordenes_corregidas_kpi.reindex(kpi_details.index, fill_value=0).values
-        })
+        # Ordenamos por el número de órdenes CORREGIDAS
+        kpi_details_sorted = ordenes_corregidas_kpi.reindex(total_ordenes_kpi.index, fill_value=0).sort_values(ascending=False).astype(int)
 
+        df_kpi_cantidad_detalle = pd.DataFrame({
+            'Ejecutivo': kpi_details_sorted.index,
+            'Corregidas': kpi_details_sorted.values,
+            'Asignadas': total_ordenes_kpi.reindex(kpi_details_sorted.index, fill_value=0).values
+        })
+        
         quantity_items = []
         for index, row in df_kpi_cantidad_detalle.iterrows():
             ejecutivo = row['Ejecutivo']
             corregidas = row['Corregidas']
             asignadas = row['Asignadas']
             
+            porcentaje = (corregidas / asignadas) if asignadas > 0 else 0
+            
             quantity_items.append(
                 dbc.ListGroupItem([
                     html.Span(f"{ejecutivo}", className="fw-bold me-auto"),
                     html.Div([
-                        dbc.Badge(f"Corregidas: {corregidas}", color="primary", className="me-2"),
-                        dbc.Badge(f"Asignadas: {asignadas}", color="light", text_color="dark")
+                        dbc.Badge(f"{porcentaje:.2%}", color="success", className="me-2", pill=True),
+                        dbc.Badge(f"Corregidas: {corregidas}", color="primary", className="me-2", pill=True),
+                        dbc.Badge(f"Asignadas: {asignadas}", color="light", text_color="dark", pill=True)
                     ], className="ms-3")
                 ], className="d-flex justify-content-start align-items-center py-2 border-0 border-bottom"))
         
