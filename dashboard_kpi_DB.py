@@ -37,9 +37,7 @@ EJECUTIVOS_KPI_RANKING = [
     "Miguel Aravena",
     "Nilsson Diaz",
     "Francisco Narvaez",
-    "Carlos Quezada",
     "Gia Marin",
-    "Marcos Coyan"
 ]
 
 
@@ -396,26 +394,26 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         ]), className="shadow-sm border-0 rounded-lg")
         
         # --- LÓGICA CORREGIDA PARA EL DETALLE DE GESTIONES ---
-        # Ordenamos por el total de órdenes asignadas para mantener consistencia
         kpi_details = total_ordenes_kpi.sort_values(ascending=False)
-        df_kpi_cantidad = pd.DataFrame({
-            'Ejecutivo': kpi_details.index,
-            'Cantidad Asignada': kpi_details.values,
-            'Cantidad Corregida': ordenes_corregidas_kpi.reindex(kpi_details.index, fill_value=0).values
-        })
         
+        df_kpi_cantidad_detalle = pd.DataFrame({
+            'Ejecutivo': kpi_details.index,
+            'Asignadas': kpi_details.values,
+            'Corregidas': ordenes_corregidas_kpi.reindex(kpi_details.index, fill_value=0).values
+        })
+
         quantity_items = []
-        for index, row in df_kpi_cantidad.iterrows():
+        for index, row in df_kpi_cantidad_detalle.iterrows():
             ejecutivo = row['Ejecutivo']
-            corregidas = row['Cantidad Corregida']
-            asignadas = row['Cantidad Asignada']
+            corregidas = row['Corregidas']
+            asignadas = row['Asignadas']
             
             quantity_items.append(
                 dbc.ListGroupItem([
                     html.Span(f"{ejecutivo}", className="fw-bold me-auto"),
                     html.Div([
                         dbc.Badge(f"Corregidas: {corregidas}", color="primary", className="me-2"),
-                        dbc.Badge(f"Asignadas: {asignadas}", color="light", className="text-dark")
+                        dbc.Badge(f"Asignadas: {asignadas}", color="light", text_color="dark")
                     ], className="ms-3")
                 ], className="d-flex justify-content-start align-items-center py-2 border-0 border-bottom"))
         
