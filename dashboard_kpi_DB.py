@@ -393,17 +393,16 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
             dbc.ListGroup(ranking_items, flush=True, className="border-0")
         ]), className="shadow-sm border-0 rounded-lg")
         
-        # --- LÓGICA CORREGIDA PARA EL DETALLE DE GESTIONES ---
         kpi_details_sorted = ordenes_corregidas_kpi.reindex(total_ordenes_kpi.index, fill_value=0).sort_values(ascending=False).astype(int)
 
-        df_kpi_cantidad_detalle = pd.DataFrame({
+        df_kpi_cantidad = pd.DataFrame({
             'Ejecutivo': kpi_details_sorted.index,
             'Corregidas': kpi_details_sorted.values,
             'Asignadas': total_ordenes_kpi.reindex(kpi_details_sorted.index, fill_value=0).values
         })
         
         quantity_items = []
-        for index, row in df_kpi_cantidad_detalle.iterrows():
+        for index, row in df_kpi_cantidad.iterrows():
             ejecutivo = row['Ejecutivo']
             corregidas = row['Corregidas']
             asignadas = row['Asignadas']
