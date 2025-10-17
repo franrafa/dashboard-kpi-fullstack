@@ -1,0 +1,38 @@
+name: Actualizar Base de Datos en Railway
+
+on:
+  push:
+    branches:
+      - main # Se activa solo cuando subes cambios a la rama 'main'
+    paths:
+      - 'FullStack_Consolidado.xlsx' # Se activa SOLO SI el archivo Excel cambia
+      - '.github/workflows/actualizar-db.yml' # O si el propio workflow cambia
+
+jobs:
+  update-database:
+    runs-on: ubuntu-latest # El robot usará un servidor Linux
+
+    steps:
+      - name: 1. Descargar el código y el Excel
+        uses: actions/checkout@v4
+
+      - name: 2. Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' # Usamos una versión estándar de Python
+
+      - name: 3. Instalar las librerías necesarias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: 4. Ejecutar el script de migración
+        env:
+          # Mapea los Secretos de GitHub a variables de entorno para el script
+          HOST: ${{ secrets.HOST }}
+          USUARIO: ${{ secrets.USUARIO }}
+          CONTRASENA: ${{ secrets.CONTRASENA }}
+          PUERTO: ${{ secrets.PUERTO }}
+          BASE_DE_DATOS: ${{ secrets.BASE_DE_DATOS }}
+        run: |
+          python migrar_datos.py
