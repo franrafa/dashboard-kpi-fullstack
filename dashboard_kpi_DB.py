@@ -173,16 +173,10 @@ def auto_update_data(n):
         traceback.print_exc()
         raise PreventUpdate
 
-@callback(
-    Output('contenedor-filtro-quincena', 'style'), 
-    Output('contenedor-filtro-semana', 'style'), 
-    Input('modo-filtro-tiempo', 'value')
-)
+@callback(Output('contenedor-filtro-quincena', 'style'), Output('contenedor-filtro-semana', 'style'), Input('modo-filtro-tiempo', 'value'))
 def controlar_visibilidad_filtros(modo):
-    if modo == 'quincena': 
-        return {'display': 'block'}, {'display': 'none'}
-    else: 
-        return {'display': 'none'}, {'display': 'block'}
+    if modo == 'quincena': return {'display': 'block'}, {'display': 'none'}
+    else: return {'display': 'none'}, {'display': 'block'}
 
 def crear_tabla_conteo_diario(df, index_col, date_range=None):
     if df.empty: return pd.DataFrame(), [], []
@@ -379,11 +373,12 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
     if not df_kpi.empty:
         total_ordenes_kpi = df_kpi.groupby(COLUMNA_ANALISTA)[COLUMNA_ORDEN].count()
         ordenes_corregidas_kpi = df_kpi[df_kpi[COLUMNA_STATUS] == 'Corregido'].groupby(COLUMNA_ANALISTA)[COLUMNA_ORDEN].count()
-        kpi_ranking = (ordenes_corregidas_kpi / total_ordenes_kpi).fillna(0).sort_values(ascending=False)
         
+        # Ranking de Resolutividad (Porcentaje)
+        kpi_ranking = (ordenes_corregidas_kpi / total_ordenes_kpi).fillna(0).sort_values(ascending=False)
         df_kpi_resolutividad = kpi_ranking.reset_index()
         df_kpi_resolutividad.columns = ['Ejecutivo', 'Resolutividad']
-
+        
         ranking_items = []
         for i, (ejecutivo, score) in enumerate(kpi_ranking.items()):
             color = "success" if i == 0 else "info" if i == 1 else "primary" if i == 2 else "secondary"
@@ -399,9 +394,11 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
             dbc.ListGroup(ranking_items, flush=True, className="border-0")
         ]), className="shadow-sm border-0 rounded-lg")
         
-        kpi_quantity = total_ordenes_kpi.sort_values(ascending=False)
+        # Ranking de Volumen (Cantidad CORREGIDA)
+        # Se usa `reindex` para asegurar que todos los ejecutivos aparezcan, incluso si tienen 0 corregidas.
+        kpi_quantity = ordenes_corregidas_kpi.reindex(total_ordenes_kpi.index, fill_value=0).sort_values(ascending=False).astype(int)
         df_kpi_cantidad = kpi_quantity.reset_index()
-        df_kpi_cantidad.columns = ['Ejecutivo', 'Cantidad Total']
+        df_kpi_cantidad.columns = ['Ejecutivo', 'Cantidad Corregida']
         
         quantity_items = []
         for i, (ejecutivo, count) in enumerate(kpi_quantity.items()):
@@ -414,7 +411,7 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
                     dbc.Badge(f"{count}", color=color, pill=True, className="ms-3 fs-6")
                 ], className="d-flex justify-content-start align-items-center py-2 border-0 border-bottom"))
         kpi_quantity_card = dbc.Card(dbc.CardBody([
-            html.H4("Volumen de Gestiones", className="card-title text-center"),
+            html.H4("Volumen de Corregidas", className="card-title text-center"),
             dbc.ListGroup(quantity_items, flush=True, className="border-0")
         ]), className="shadow-sm border-0 rounded-lg")
     else:
