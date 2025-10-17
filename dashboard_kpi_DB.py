@@ -53,7 +53,13 @@ def cargar_datos_desde_db():
 
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Conectando a la base de datos en la nube...")
     
-    cadena_conexion = f"mysql+pymysql://{USUARIO}:{CONTRASENA}@{HOST}:{PUERTO}/{BASE_DE_DATOS}"
+    # Lee la URL de la base de datos desde los secretos
+    cadena_conexion = os.environ.get("DATABASE_URL")
+    
+    if not cadena_conexion:
+        print("ERROR: No se encontró la variable de entorno DATABASE_URL.")
+        raise ValueError("No se encontró la variable de entorno DATABASE_URL")
+
     engine = create_engine(
         cadena_conexion,
         pool_recycle=3600,
@@ -114,7 +120,7 @@ if datos_cargados_correctamente:
         dcc.Store(id='store-download-raw-data'),
         dcc.Store(id='store-kpi-resolutividad-data'),
         dcc.Store(id='store-kpi-cantidad-data'),
-        dcc.Store(id='store-filtered-data'), 
+        dcc.Store(id='store-filtered-data'),
         
         dbc.Row(dbc.Col(html.H1("Dashboard Consolidado FullStack", className="text-center text-primary my-4"))),
         dbc.Card(dbc.CardBody([
@@ -272,19 +278,17 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
     if torres: dff = dff[dff[COLUMNA_TORRE].isin(torres)]
     if ejecutivos: dff = dff[dff[COLUMNA_ANALISTA].isin(ejecutivos)]
 
-    # Bloque `if dff.empty:` CORREGIDO
     if dff.empty:
         empty_df_dict = [{'Nota': 'No hay datos para los filtros seleccionados'}]
         empty_cols = [{'name': 'Nota', 'id': 'Nota'}]
         no_data_msg = [dbc.Col(dbc.Alert("No hay datos para mostrar con los filtros seleccionados.", color="warning"), width=12)]
         empty_fig = {'layout': {'xaxis': {'visible': False}, 'yaxis': {'visible': False}, 'annotations': [{'text': 'No data', 'showarrow': False}]}}
-        empty_data = pd.DataFrame().to_json(orient='split') # Define empty_data aquí
+        empty_data = pd.DataFrame().to_json(orient='split')
         return (empty_df_dict, empty_cols, empty_df_dict, empty_cols, empty_df_dict, empty_cols,
                 empty_df_dict, empty_cols, empty_df_dict, empty_cols, 
                 no_data_msg, no_data_msg, no_data_msg,
                 empty_fig, empty_fig, empty_fig, empty_fig, 
-                no_data_msg, no_data_msg, 
-                empty_data, empty_data, empty_data) # Devuelve empty_data para los 3 stores
+                no_data_msg, no_data_msg, empty_data, empty_data, empty_data) 
 
     all_months_ordered_local = sorted(df_principal['Mes'].unique(), key=lambda m: pd.to_datetime(f'01-{m}-2025', format='%d-%B-%Y').month)
     
@@ -428,15 +432,14 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
             dbc.ListGroup(quantity_items, flush=True, className="border-0")
         ]), className="shadow-sm border-0 rounded-lg")
         
-        # Preparar datos para descarga
-        df_kpi_cantidad_download = df_kpi_cantidad # Asegurarse de usar la variable correcta
+        df_kpi_cantidad_download = df_kpi_cantidad # Renombrado para la descarga
         
     else:
         alert_msg = dbc.Alert("No hay datos para generar el ranking KPI con los ejecutivos y filtros seleccionados.", color="info")
         kpi_ranking_card = alert_msg
         kpi_quantity_card = alert_msg
         df_kpi_resolutividad = pd.DataFrame()
-        df_kpi_cantidad_download = pd.DataFrame() 
+        df_kpi_cantidad_download = pd.DataFrame()
     
     return (
         data_mensual, cols_mensual, 
@@ -572,7 +575,7 @@ def download_ranking_excel(n_clicks, json_resolutividad, json_cantidad, json_con
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_resolutividad.to_excel(writer, sheet_name='Ranking Resolutividad', index=False)
-        df_cantidad.to_excel(writer, sheet_name='Ranking Cantidad', index=False)
+        df_cantidad.to_excel(writer, sheet_name='Ranking Detalle', index=False) # Nombre de hoja corregido
         df_consolidado.to_excel(writer, sheet_name='Consolidado Filtrado', index=False)
     
     output.seek(0)

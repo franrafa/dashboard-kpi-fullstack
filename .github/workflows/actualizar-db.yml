@@ -28,11 +28,6 @@ jobs:
 
       - name: 4. Ejecutar el script de migración
         env:
-          # Mapea los Secretos de GitHub a variables de entorno para el script
-          HOST: ${{ secrets.HOST }}
-          USUARIO: ${{ secrets.USUARIO }}
-          CONTRASENA: ${{ secrets.CONTRASENA }}
-          PUERTO: ${{ secrets.PUERTO }}
-          BASE_DE_DATOS: ${{ secrets.BASE_DE_DATOS }}
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           python migrar_datos.py
