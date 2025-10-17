@@ -395,12 +395,10 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
             dbc.ListGroup(ranking_items, flush=True, className="border-0")
         ]), className="shadow-sm border-0 rounded-lg")
         
-        kpi_details_sorted = ordenes_corregidas_kpi.reindex(total_ordenes_kpi.index, fill_value=0).sort_values(ascending=False).astype(int)
-
         df_kpi_cantidad = pd.DataFrame({
-            'Ejecutivo': kpi_details_sorted.index,
-            'Corregidas': kpi_details_sorted.values,
-            'Asignadas': total_ordenes_kpi.reindex(kpi_details_sorted.index, fill_value=0).values
+            'Ejecutivo': kpi_ranking.index,
+            'Corregidas': ordenes_corregidas_kpi.reindex(kpi_ranking.index, fill_value=0).values,
+            'Asignadas': total_ordenes_kpi.reindex(kpi_ranking.index, fill_value=0).values
         })
         
         quantity_items = []
