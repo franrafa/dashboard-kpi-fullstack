@@ -110,6 +110,8 @@ if datos_cargados_correctamente:
         dcc.Store(id='store-resumen-conteo-data'),
         dcc.Store(id='store-resumen-porcentaje-data'),
         dcc.Store(id='store-download-raw-data'),
+        dcc.Store(id='store-kpi-resolutividad-data'),
+        dcc.Store(id='store-kpi-cantidad-data'),
         
         dbc.Row(dbc.Col(html.H1("Dashboard Consolidado FullStack", className="text-center text-primary my-4"))),
         dbc.Card(dbc.CardBody([
@@ -128,33 +130,9 @@ if datos_cargados_correctamente:
         ]), className="mb-4 shadow-sm"),
 
         dbc.Tabs([
-            dbc.Tab(label="Resumen Mensual", children=[
-                dbc.Row(id='tarjetas-kpi-mensual', className="my-4 g-4"),
-                dbc.Row([
-                    dbc.Col([
-                        html.H4("Resumen Mensual por Torre y Ejecutivo", className="border-bottom pb-2 mb-3 text-info"),
-                        dash_table.DataTable(id='tabla-resumen-mensual', style_header={'backgroundColor': '#E0E6F8', 'fontWeight': 'bold', 'textAlign': 'center'}, style_cell={'textAlign': 'center', 'padding': '8px'}, style_data_conditional=[{'if': {'filter_query': '{Tipo} = "Torre"'}, 'backgroundColor': '#C0D9EE', 'fontWeight': 'bold'},{'if': {'column_id': 'Etiquetas de Fila'}, 'textAlign': 'left', 'fontWeight': 'bold'},{'if': {'column_id': 'Total General'}, 'fontWeight': 'bold', 'backgroundColor': '#E0E6F8'}], export_format="xlsx", export_headers="display")
-                    ], width=12)
-                ], className="mb-4")
-            ]),
-            dbc.Tab(label="Detalle Diario", children=[
-                dbc.Row(id='tarjetas-kpi-diario', className="my-4 g-4"), 
-                dbc.Row([dbc.Col([html.H4("Resumen Diario por Torre", className="border-bottom pb-2 my-3 text-success"), dash_table.DataTable(id='tabla-resumen-torre', style_table={'overflowX': 'auto'}, style_header={'backgroundColor': '#e8f5e9', 'fontWeight': 'bold', 'textAlign': 'center'}, style_cell={'textAlign': 'center', 'minWidth': '120px', 'padding': '8px'}, style_cell_conditional=[{'if': {'column_id': COLUMNA_TORRE}, 'textAlign': 'left', 'fontWeight': 'bold', 'minWidth': '180px'}, {'if': {'column_id': 'Total General'}, 'fontWeight': 'bold', 'backgroundColor': '#e8f5e9'}], style_data_conditional=[{'if': {'filter_query': f'{{{COLUMNA_TORRE}}} = "Total General"'},'backgroundColor': '#d4edda','fontWeight': 'bold'}], export_format="xlsx", export_headers="display")], width=12)], className="mb-4"), 
-                dbc.Row([dbc.Col([html.H4("Resumen Diario por Status", className="border-bottom pb-2 mb-3 text-warning"), dash_table.DataTable(id='tabla-resumen-status', style_table={'overflowX': 'auto'}, style_header={'backgroundColor': '#fff3e0', 'fontWeight': 'bold', 'textAlign': 'center'}, style_cell={'textAlign': 'center', 'minWidth': '120px', 'padding': '8px'}, style_cell_conditional=[{'if': {'column_id': COLUMNA_STATUS}, 'textAlign': 'left', 'fontWeight': 'bold', 'minWidth': '180px'}, {'if': {'column_id': 'Total General'}, 'fontWeight': 'bold', 'backgroundColor': '#fff3e0'}], style_data_conditional=[{'if': {'filter_query': f'{{{COLUMNA_STATUS}}} = "Total General"'},'backgroundColor': '#ffecb3','fontWeight': 'bold'}], export_format="xlsx", export_headers="display")], width=12)], className="mb-4"), 
-                dbc.Row([dbc.Col([html.H4("Resumen Diario por Ejecutivo (Cantidad)", className="border-bottom pb-2 mb-3 text-info"), dash_table.DataTable(id='tabla-resumen-ejecutivo-conteo', style_table={'overflowX': 'auto'}, style_header={'backgroundColor': '#f2e3fd', 'fontWeight': 'bold', 'textAlign': 'center'}, style_cell={'textAlign': 'center', 'minWidth': '120px', 'padding': '8px'}, style_cell_conditional=[{'if': {'column_id': COLUMNA_ANALISTA}, 'textAlign': 'left', 'fontWeight': 'bold', 'minWidth': '180px'}, {'if': {'column_id': 'Total General'}, 'fontWeight': 'bold', 'backgroundColor': '#f2e3fd'}], style_data_conditional=[{'if': {'filter_query': f'{{{COLUMNA_ANALISTA}}} = "Total General"'},'backgroundColor': '#e3d0fa','fontWeight': 'bold'}], export_format="xlsx", export_headers="display")], width=12)], className="mb-4"), 
-                dbc.Row([dbc.Col([html.H4("Porcentaje de Resolutividad Diario por Ejecutivo", className="border-bottom pb-2 mb-3 text-primary"), dash_table.DataTable(id='tabla-resumen-ejecutivo-porcentaje', style_table={'overflowX': 'auto'}, style_header={'backgroundColor': '#e3f2fd'}, style_cell={'textAlign': 'center', 'minWidth': '120px', 'padding': '8px'}, style_cell_conditional=[{'if': {'column_id': COLUMNA_ANALISTA}, 'textAlign': 'left', 'fontWeight': 'bold', 'minWidth': '180px'}, {'if': {'column_id': 'Total General'}, 'fontWeight': 'bold', 'backgroundColor': '#e3f2fd'}])], width=12)], className="mb-4")
-            ]),
-            dbc.Tab(label="Gráficos", children=[
-                dbc.Row(id='tarjetas-kpi-graficos', className="my-4 g-4"), 
-                dbc.Row([
-                    dbc.Col(dbc.Card(dcc.Graph(id='grafico-torta-torre'), className="shadow-sm"), md=6), 
-                    dbc.Col(dbc.Card(dcc.Graph(id='grafico-barras-resolutividad'), className="shadow-sm"), md=6)
-                ], className="my-4"), 
-                dbc.Row([
-                    dbc.Col(dbc.Card(dcc.Graph(id='grafico-volumen-ejecutivo'), className="shadow-sm"), md=6), 
-                    dbc.Col(dbc.Card(dcc.Graph(id='grafico-composicion-status'), className="shadow-sm"), md=6)
-                ], className="my-4")
-            ]),
+            dbc.Tab(label="Resumen Mensual", children=[dbc.Row(id='tarjetas-kpi-mensual', className="my-4 g-4"), dbc.Row([dbc.Col([html.H4("Resumen Mensual por Torre y Ejecutivo", className="border-bottom pb-2 mb-3 text-info"), dash_table.DataTable(id='tabla-resumen-mensual', style_header={'backgroundColor': '#E0E6F8', 'fontWeight': 'bold', 'textAlign': 'center'}, style_cell={'textAlign': 'center', 'padding': '8px'}, style_data_conditional=[{'if': {'filter_query': '{Tipo} = "Torre"'}, 'backgroundColor': '#C0D9EE', 'fontWeight': 'bold'},{'if': {'column_id': 'Etiquetas de Fila'}, 'textAlign': 'left', 'fontWeight': 'bold'},{'if': {'column_id': 'Total General'}, 'fontWeight': 'bold', 'backgroundColor': '#E0E6F8'}], export_format="xlsx", export_headers="display")], width=12)], className="mb-4")]),
+            dbc.Tab(label="Detalle Diario", children=[dbc.Row(id='tarjetas-kpi-diario', className="my-4 g-4"), dbc.Row([dbc.Col([html.H4("Resumen Diario por Torre", className="border-bottom pb-2 my-3 text-success"), dash_table.DataTable(id='tabla-resumen-torre', style_table={'overflowX': 'auto'}, style_header={'backgroundColor': '#e8f5e9', 'fontWeight': 'bold', 'textAlign': 'center'}, style_cell={'textAlign': 'center', 'minWidth': '120px', 'padding': '8px'}, style_cell_conditional=[{'if': {'column_id': COLUMNA_TORRE}, 'textAlign': 'left', 'fontWeight': 'bold', 'minWidth': '180px'}, {'if': {'column_id': 'Total General'}, 'fontWeight': 'bold', 'backgroundColor': '#e8f5e9'}], style_data_conditional=[{'if': {'filter_query': f'{{{COLUMNA_TORRE}}} = "Total General"'},'backgroundColor': '#d4edda','fontWeight': 'bold'}], export_format="xlsx", export_headers="display")], width=12)], className="mb-4"), dbc.Row([dbc.Col([html.H4("Resumen Diario por Status", className="border-bottom pb-2 mb-3 text-warning"), dash_table.DataTable(id='tabla-resumen-status', style_table={'overflowX': 'auto'}, style_header={'backgroundColor': '#fff3e0', 'fontWeight': 'bold', 'textAlign': 'center'}, style_cell={'textAlign': 'center', 'minWidth': '120px', 'padding': '8px'}, style_cell_conditional=[{'if': {'column_id': COLUMNA_STATUS}, 'textAlign': 'left', 'fontWeight': 'bold', 'minWidth': '180px'}, {'if': {'column_id': 'Total General'}, 'fontWeight': 'bold', 'backgroundColor': '#fff3e0'}], style_data_conditional=[{'if': {'filter_query': f'{{{COLUMNA_STATUS}}} = "Total General"'},'backgroundColor': '#ffecb3','fontWeight': 'bold'}], export_format="xlsx", export_headers="display")], width=12)], className="mb-4"), dbc.Row([dbc.Col([html.H4("Resumen Diario por Ejecutivo (Cantidad)", className="border-bottom pb-2 mb-3 text-info"), dash_table.DataTable(id='tabla-resumen-ejecutivo-conteo', style_table={'overflowX': 'auto'}, style_header={'backgroundColor': '#f2e3fd', 'fontWeight': 'bold', 'textAlign': 'center'}, style_cell={'textAlign': 'center', 'minWidth': '120px', 'padding': '8px'}, style_cell_conditional=[{'if': {'column_id': COLUMNA_ANALISTA}, 'textAlign': 'left', 'fontWeight': 'bold', 'minWidth': '180px'}, {'if': {'column_id': 'Total General'}, 'fontWeight': 'bold', 'backgroundColor': '#f2e3fd'}], style_data_conditional=[{'if': {'filter_query': f'{{{COLUMNA_ANALISTA}}} = "Total General"'},'backgroundColor': '#e3d0fa','fontWeight': 'bold'}], export_format="xlsx", export_headers="display")], width=12)], className="mb-4"), dbc.Row([dbc.Col([html.H4("Porcentaje de Resolutividad Diario por Ejecutivo", className="border-bottom pb-2 mb-3 text-primary"), dash_table.DataTable(id='tabla-resumen-ejecutivo-porcentaje', style_table={'overflowX': 'auto'}, style_header={'backgroundColor': '#e3f2fd'}, style_cell={'textAlign': 'center', 'minWidth': '120px', 'padding': '8px'}, style_cell_conditional=[{'if': {'column_id': COLUMNA_ANALISTA}, 'textAlign': 'left', 'fontWeight': 'bold', 'minWidth': '180px'}, {'if': {'column_id': 'Total General'}, 'fontWeight': 'bold', 'backgroundColor': '#e3f2fd'}])], width=12)], className="mb-4")]),
+            dbc.Tab(label="Gráficos", children=[dbc.Row(id='tarjetas-kpi-graficos', className="my-4 g-4"), dbc.Row([dbc.Col(dbc.Card(dcc.Graph(id='grafico-torta-torre'), className="shadow-sm"), md=6), dbc.Col(dbc.Card(dcc.Graph(id='grafico-barras-resolutividad'), className="shadow-sm"), md=6)], className="my-4"), dbc.Row([dbc.Col(dbc.Card(dcc.Graph(id='grafico-volumen-ejecutivo'), className="shadow-sm"), md=6), dbc.Col(dbc.Card(dcc.Graph(id='grafico-composicion-status'), className="shadow-sm"), md=6)], className="my-4")]),
             dbc.Tab(label="Ranking KPI", children=[
                 dbc.Row([
                     dbc.Col(html.H3("Ranking de Ejecutivos Clave", className="mt-4 mb-3 border-bottom pb-2 text-primary"), width=12, className="text-center")
@@ -162,20 +140,12 @@ if datos_cargados_correctamente:
                 dbc.Row([
                     dbc.Col(id='kpi-ranking-container', md=5),
                     dbc.Col(id='kpi-quantity-ranking-container', md=5) 
-                ], className="my-4", justify="center")
-            ]),
-            dbc.Tab(label="Descargar", children=[
+                ], className="my-4", justify="center"),
                 dbc.Row([
-                    dbc.Col([
-                        html.H4("Panel de Descarga", className="mt-4 mb-3 text-dark"),
-                        html.P("Usa los filtros principales del dashboard y el selector de fechas para definir los datos a descargar.", className="text-muted"),
-                        dcc.DatePickerRange(id='download-date-picker', min_date_allowed=df_principal[COLUMNA_FECHA].min().date(), max_date_allowed=df_principal[COLUMNA_FECHA].max().date(), start_date=df_principal[COLUMNA_FECHA].min().date(), end_date=df_principal[COLUMNA_FECHA].max().date(), display_format='DD/MM/YYYY', className="dbc"),
-                        dbc.Button("Generar Archivo para Descarga", id="btn-generate-download", color="primary", className="mt-3 w-75"),
-                        html.Div(id="download-preview-container", className="mt-4"),
-                        dbc.Button("Descargar Archivo Completo (3 Hojas) como XLSX", id="btn-download-all", color="success", className="mt-3 w-75", disabled=True)
-                    ], className="text-center", md={'size': 8, 'offset': 2})
-                ], className="my-4")
-            ])
+                    dbc.Col(dbc.Button("Descargar Ranking como XLSX", id="btn-download-ranking", color="success", outline=True, className="mt-3"), width={"size": 4, "offset": 4})
+                ], className="mb-4")
+            ]),
+            dbc.Tab(label="Descargar", children=[dbc.Row([dbc.Col([html.H4("Panel de Descarga", className="mt-4 mb-3 text-dark"), html.P("Usa los filtros principales del dashboard y el selector de fechas para definir los datos a descargar.", className="text-muted"), dcc.DatePickerRange(id='download-date-picker', min_date_allowed=df_principal[COLUMNA_FECHA].min().date(), max_date_allowed=df_principal[COLUMNA_FECHA].max().date(), start_date=df_principal[COLUMNA_FECHA].min().date(), end_date=df_principal[COLUMNA_FECHA].max().date(), display_format='DD/MM/YYYY', className="dbc"), dbc.Button("Generar Archivo para Descarga", id="btn-generate-download", color="primary", className="mt-3 w-75"), html.Div(id="download-preview-container", className="mt-4"), dbc.Button("Descargar Archivo Completo (3 Hojas) como XLSX", id="btn-download-all", color="success", className="mt-3 w-75", disabled=True)], className="text-center", md={'size': 8, 'offset': 2})], className="my-4")])
         ], className="mt-4 shadow-sm"),
         html.Div(id='last-updated-text', children=[initial_load_time_str], style={'textAlign': 'right', 'color': 'grey', 'marginTop': '20px', 'fontSize': '0.8em'})
     ], fluid=True)
@@ -278,6 +248,8 @@ def crear_tabla_porcentaje_corregido(df, index_col, date_range=None):
     Output('grafico-composicion-status', 'figure'),
     Output('kpi-ranking-container', 'children'),
     Output('kpi-quantity-ranking-container', 'children'),
+    Output('store-kpi-resolutividad-data', 'data'),
+    Output('store-kpi-cantidad-data', 'data'),
     Input('store-main-data', 'data'),
     Input('filtro-mes', 'value'), 
     Input('filtro-quincena', 'value'), 
@@ -307,11 +279,12 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         empty_cols = [{'name': 'Nota', 'id': 'Nota'}]
         no_data_msg = [dbc.Col(dbc.Alert("No hay datos para mostrar con los filtros seleccionados.", color="warning"), width=12)]
         empty_fig = {'layout': {'xaxis': {'visible': False}, 'yaxis': {'visible': False}, 'annotations': [{'text': 'No data', 'showarrow': False}]}}
+        empty_data = pd.DataFrame().to_json(orient='split')
         return (empty_df_dict, empty_cols, empty_df_dict, empty_cols, empty_df_dict, empty_cols,
                 empty_df_dict, empty_cols, empty_df_dict, empty_cols, 
                 no_data_msg, no_data_msg, no_data_msg,
                 empty_fig, empty_fig, empty_fig, empty_fig, 
-                no_data_msg, no_data_msg) 
+                no_data_msg, no_data_msg, empty_data, empty_data) 
 
     all_months_ordered_local = sorted(df_principal['Mes'].unique(), key=lambda m: pd.to_datetime(f'01-{m}-2025', format='%d-%B-%Y').month)
     
@@ -408,6 +381,9 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         ordenes_corregidas_kpi = df_kpi[df_kpi[COLUMNA_STATUS] == 'Corregido'].groupby(COLUMNA_ANALISTA)[COLUMNA_ORDEN].count()
         kpi_ranking = (ordenes_corregidas_kpi / total_ordenes_kpi).fillna(0).sort_values(ascending=False)
         
+        df_kpi_resolutividad = kpi_ranking.reset_index()
+        df_kpi_resolutividad.columns = ['Ejecutivo', 'Resolutividad']
+
         ranking_items = []
         for i, (ejecutivo, score) in enumerate(kpi_ranking.items()):
             color = "success" if i == 0 else "info" if i == 1 else "primary" if i == 2 else "secondary"
@@ -424,6 +400,8 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         ]), className="shadow-sm border-0 rounded-lg")
         
         kpi_quantity = total_ordenes_kpi.sort_values(ascending=False)
+        df_kpi_cantidad = kpi_quantity.reset_index()
+        df_kpi_cantidad.columns = ['Ejecutivo', 'Cantidad Total']
         
         quantity_items = []
         for i, (ejecutivo, count) in enumerate(kpi_quantity.items()):
@@ -443,6 +421,8 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         alert_msg = dbc.Alert("No hay datos para generar el ranking KPI con los ejecutivos y filtros seleccionados.", color="info")
         kpi_ranking_card = alert_msg
         kpi_quantity_card = alert_msg
+        df_kpi_resolutividad = pd.DataFrame()
+        df_kpi_cantidad = pd.DataFrame()
     
     return (
         data_mensual, cols_mensual, 
@@ -453,7 +433,9 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         tarjetas, tarjetas, tarjetas, 
         fig_torta_torre, fig_bar_resolutividad, fig_volumen_ejec, fig_composicion_status,
         kpi_ranking_card,
-        kpi_quantity_card
+        kpi_quantity_card,
+        df_kpi_resolutividad.to_json(orient='split', index=False),
+        df_kpi_cantidad.to_json(orient='split', index=False)
     )
 
 @callback(
@@ -547,6 +529,35 @@ def download_all_in_one_excel(n_clicks, json_raw, json_conteo, json_porcentaje):
     filename = f"reporte_completo_{timestamp}.xlsx"
     return dcc.send_bytes(output.read(), filename=filename)
 
+@callback(
+    Output("download-excel", "data", allow_duplicate=True),
+    Input("btn-download-ranking", "n_clicks"),
+    State('store-kpi-resolutividad-data', 'data'),
+    State('store-kpi-cantidad-data', 'data'),
+    prevent_initial_call=True,
+)
+def download_ranking_excel(n_clicks, json_resolutividad, json_cantidad):
+    if not n_clicks or not json_resolutividad or not json_cantidad:
+        raise PreventUpdate
+    
+    df_resolutividad = pd.read_json(io.StringIO(json_resolutividad), orient='split')
+    df_cantidad = pd.read_json(io.StringIO(json_cantidad), orient='split')
+    
+    if not df_resolutividad.empty:
+        df_resolutividad['Resolutividad'] = pd.to_numeric(df_resolutividad['Resolutividad'])
+        df_resolutividad['Resolutividad'] = df_resolutividad['Resolutividad'].apply(lambda x: f"{x:.2%}")
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df_resolutividad.to_excel(writer, sheet_name='Ranking Resolutividad', index=False)
+        df_cantidad.to_excel(writer, sheet_name='Ranking Cantidad', index=False)
+    
+    output.seek(0)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"ranking_kpi_{timestamp}.xlsx"
+    
+    return dcc.send_bytes(output.read(), filename=filename)
 
 # --- 6. INICIAR EL SERVIDOR ---
 if __name__ == '__main__':
