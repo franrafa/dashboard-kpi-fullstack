@@ -37,7 +37,9 @@ EJECUTIVOS_KPI_RANKING = [
     "Miguel Aravena",
     "Nilsson Diaz",
     "Francisco Narvaez",
+    "Carlos Quezada",
     "Gia Marin",
+    "Marcos Coyan"
 ]
 
 
@@ -173,16 +175,10 @@ def auto_update_data(n):
         traceback.print_exc()
         raise PreventUpdate
 
-@callback(
-    Output('contenedor-filtro-quincena', 'style'), 
-    Output('contenedor-filtro-semana', 'style'), 
-    Input('modo-filtro-tiempo', 'value')
-)
+@callback(Output('contenedor-filtro-quincena', 'style'), Output('contenedor-filtro-semana', 'style'), Input('modo-filtro-tiempo', 'value'))
 def controlar_visibilidad_filtros(modo):
-    if modo == 'quincena': 
-        return {'display': 'block'}, {'display': 'none'}
-    else: 
-        return {'display': 'none'}, {'display': 'block'}
+    if modo == 'quincena': return {'display': 'block'}, {'display': 'none'}
+    else: return {'display': 'none'}, {'display': 'block'}
 
 def crear_tabla_conteo_diario(df, index_col, date_range=None):
     if df.empty: return pd.DataFrame(), [], []
@@ -399,24 +395,35 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
             dbc.ListGroup(ranking_items, flush=True, className="border-0")
         ]), className="shadow-sm border-0 rounded-lg")
         
-        kpi_quantity = ordenes_corregidas_kpi.reindex(total_ordenes_kpi.index, fill_value=0).sort_values(ascending=False).astype(int)
-        df_kpi_cantidad = kpi_quantity.reset_index()
-        df_kpi_cantidad.columns = ['Ejecutivo', 'Cantidad Corregida']
+        # --- LÓGICA CORREGIDA PARA EL DETALLE DE GESTIONES ---
+        # Ordenamos por el total de órdenes asignadas para mantener consistencia
+        kpi_details = total_ordenes_kpi.sort_values(ascending=False)
+        df_kpi_cantidad = pd.DataFrame({
+            'Ejecutivo': kpi_details.index,
+            'Cantidad Asignada': kpi_details.values,
+            'Cantidad Corregida': ordenes_corregidas_kpi.reindex(kpi_details.index, fill_value=0).values
+        })
         
         quantity_items = []
-        for i, (ejecutivo, count) in enumerate(kpi_quantity.items()):
-            color = "primary" if i == 0 else "secondary"
-            icon = "bi bi-lightning-charge-fill text-warning"
+        for index, row in df_kpi_cantidad.iterrows():
+            ejecutivo = row['Ejecutivo']
+            corregidas = row['Cantidad Corregida']
+            asignadas = row['Cantidad Asignada']
+            
             quantity_items.append(
                 dbc.ListGroupItem([
-                    html.I(className=f"{icon} me-2"),
                     html.Span(f"{ejecutivo}", className="fw-bold me-auto"),
-                    dbc.Badge(f"{count}", color=color, pill=True, className="ms-3 fs-6")
+                    html.Div([
+                        dbc.Badge(f"Corregidas: {corregidas}", color="primary", className="me-2"),
+                        dbc.Badge(f"Asignadas: {asignadas}", color="light", className="text-dark")
+                    ], className="ms-3")
                 ], className="d-flex justify-content-start align-items-center py-2 border-0 border-bottom"))
+        
         kpi_quantity_card = dbc.Card(dbc.CardBody([
-            html.H4("Volumen de Corregidas", className="card-title text-center"),
+            html.H4("Detalle de Gestiones", className="card-title text-center"),
             dbc.ListGroup(quantity_items, flush=True, className="border-0")
         ]), className="shadow-sm border-0 rounded-lg")
+        
     else:
         alert_msg = dbc.Alert("No hay datos para generar el ranking KPI con los ejecutivos y filtros seleccionados.", color="info")
         kpi_ranking_card = alert_msg
@@ -558,6 +565,7 @@ def download_ranking_excel(n_clicks, json_resolutividad, json_cantidad):
     filename = f"ranking_kpi_{timestamp}.xlsx"
     
     return dcc.send_bytes(output.read(), filename=filename)
+
 
 # --- 6. INICIAR EL SERVIDOR ---
 if __name__ == '__main__':
