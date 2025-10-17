@@ -114,7 +114,7 @@ if datos_cargados_correctamente:
         dcc.Store(id='store-download-raw-data'),
         dcc.Store(id='store-kpi-resolutividad-data'),
         dcc.Store(id='store-kpi-cantidad-data'),
-        dcc.Store(id='store-filtered-data'), # Nuevo store para el consolidado filtrado
+        dcc.Store(id='store-filtered-data'), 
         
         dbc.Row(dbc.Col(html.H1("Dashboard Consolidado FullStack", className="text-center text-primary my-4"))),
         dbc.Card(dbc.CardBody([
@@ -247,7 +247,7 @@ def crear_tabla_porcentaje_corregido(df, index_col, date_range=None):
     Output('kpi-quantity-ranking-container', 'children'),
     Output('store-kpi-resolutividad-data', 'data'),
     Output('store-kpi-cantidad-data', 'data'),
-    Output('store-filtered-data', 'data'), # Nuevo Output
+    Output('store-filtered-data', 'data'),
     Input('store-main-data', 'data'),
     Input('filtro-mes', 'value'), 
     Input('filtro-quincena', 'value'), 
@@ -272,17 +272,19 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
     if torres: dff = dff[dff[COLUMNA_TORRE].isin(torres)]
     if ejecutivos: dff = dff[dff[COLUMNA_ANALISTA].isin(ejecutivos)]
 
+    # Bloque `if dff.empty:` CORREGIDO
     if dff.empty:
         empty_df_dict = [{'Nota': 'No hay datos para los filtros seleccionados'}]
         empty_cols = [{'name': 'Nota', 'id': 'Nota'}]
         no_data_msg = [dbc.Col(dbc.Alert("No hay datos para mostrar con los filtros seleccionados.", color="warning"), width=12)]
         empty_fig = {'layout': {'xaxis': {'visible': False}, 'yaxis': {'visible': False}, 'annotations': [{'text': 'No data', 'showarrow': False}]}}
-        empty_data = pd.DataFrame().to_json(orient='split')
+        empty_data = pd.DataFrame().to_json(orient='split') # Define empty_data aquí
         return (empty_df_dict, empty_cols, empty_df_dict, empty_cols, empty_df_dict, empty_cols,
                 empty_df_dict, empty_cols, empty_df_dict, empty_cols, 
                 no_data_msg, no_data_msg, no_data_msg,
                 empty_fig, empty_fig, empty_fig, empty_fig, 
-                no_data_msg, no_data_msg, empty_data, empty_data, empty_data) 
+                no_data_msg, no_data_msg, 
+                empty_data, empty_data, empty_data) # Devuelve empty_data para los 3 stores
 
     all_months_ordered_local = sorted(df_principal['Mes'].unique(), key=lambda m: pd.to_datetime(f'01-{m}-2025', format='%d-%B-%Y').month)
     
@@ -397,15 +399,14 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
             dbc.ListGroup(ranking_items, flush=True, className="border-0")
         ]), className="shadow-sm border-0 rounded-lg")
         
-        # --- LÓGICA CORREGIDA PARA EL DETALLE DE GESTIONES ---
-        df_kpi_cantidad_detalle = pd.DataFrame({
-            'Ejecutivo': kpi_ranking.index, # Usar el orden del ranking de resolutividad
+        df_kpi_cantidad = pd.DataFrame({
+            'Ejecutivo': kpi_ranking.index, 
             'Corregidas': ordenes_corregidas_kpi.reindex(kpi_ranking.index, fill_value=0).values,
             'Asignadas': total_ordenes_kpi.reindex(kpi_ranking.index, fill_value=0).values
         })
         
         quantity_items = []
-        for index, row in df_kpi_cantidad_detalle.iterrows():
+        for index, row in df_kpi_cantidad.iterrows():
             ejecutivo = row['Ejecutivo']
             corregidas = row['Corregidas']
             asignadas = row['Asignadas']
@@ -428,14 +429,14 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         ]), className="shadow-sm border-0 rounded-lg")
         
         # Preparar datos para descarga
-        df_kpi_cantidad_download = df_kpi_cantidad_detalle
+        df_kpi_cantidad_download = df_kpi_cantidad # Asegurarse de usar la variable correcta
         
     else:
         alert_msg = dbc.Alert("No hay datos para generar el ranking KPI con los ejecutivos y filtros seleccionados.", color="info")
         kpi_ranking_card = alert_msg
         kpi_quantity_card = alert_msg
         df_kpi_resolutividad = pd.DataFrame()
-        df_kpi_cantidad_download = pd.DataFrame() # DataFrame vacío
+        df_kpi_cantidad_download = pd.DataFrame() 
     
     return (
         data_mensual, cols_mensual, 
@@ -548,7 +549,7 @@ def download_all_in_one_excel(n_clicks, json_raw, json_conteo, json_porcentaje):
     Input("btn-download-ranking", "n_clicks"),
     State('store-kpi-resolutividad-data', 'data'),
     State('store-kpi-cantidad-data', 'data'),
-    State('store-filtered-data', 'data'), # Nuevo State
+    State('store-filtered-data', 'data'), 
     prevent_initial_call=True,
 )
 def download_ranking_excel(n_clicks, json_resolutividad, json_cantidad, json_consolidado):
