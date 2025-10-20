@@ -328,7 +328,7 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
 
     gestion_fte_dia = 0
     if dias_trabajados > 0 and total_ejecutivos > 0:
-        gestion_fte_dia = int(((gestion_totales - total_capacidad) / dias_trabajados) / total_ejecutivos)
+        gestion_fte_dia = round(((gestion_totales - total_capacidad) / dias_trabajados) / total_ejecutivos)
     
     total_corregido = dff[dff[COLUMNA_STATUS] == 'Corregido'][COLUMNA_ORDEN].count()
     tasa_resolutividad_raw = (total_corregido / gestion_totales) if gestion_totales > 0 else 0
