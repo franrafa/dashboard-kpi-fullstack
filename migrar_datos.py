@@ -5,7 +5,6 @@ from google.oauth2.service_account import Credentials
 import os
 
 # --- 1. CONFIGURACIÓN ---
-# Lee las credenciales de los Secretos de GitHub
 DB_URL = os.environ.get("DATABASE_URL")
 GCP_SA_KEY = os.environ.get("GCP_SA_KEY")
 SHEET_ID = os.environ.get("SHEET_ID")
@@ -36,8 +35,19 @@ try:
     spreadsheet = client.open_by_key(SHEET_ID)
     worksheet = spreadsheet.worksheet(HOJA_DATOS)
     
-    records = worksheet.get_all_records()
-    df = pd.DataFrame(records)
+    # --- MÉTODO DE LECTURA MEJORADO ---
+    print("Leyendo todos los valores de la hoja...")
+    values = worksheet.get_all_values() # Esto devuelve una lista de listas
+    
+    if not values:
+        print("ERROR: La hoja de cálculo está vacía.")
+        os.remove("google_credentials.json")
+        exit(1)
+        
+    print(f"Se encontraron {len(values) - 1} filas de datos (más 1 fila de encabezado).")
+    
+    # La primera fila (values[0]) es el encabezado, el resto (values[1:]) son los datos.
+    df = pd.DataFrame(values[1:], columns=values[0])
     
     # Limpiar el archivo de credenciales temporal
     os.remove("google_credentials.json")
