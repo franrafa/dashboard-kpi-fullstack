@@ -114,7 +114,7 @@ if datos_cargados_correctamente:
         dcc.Store(id='store-download-raw-data'),
         dcc.Store(id='store-kpi-resolutividad-data'),
         dcc.Store(id='store-kpi-cantidad-data'),
-        dcc.Store(id='store-filtered-data'), 
+        dcc.Store(id='store-filtered-data'),
         
         dbc.Row(dbc.Col(html.H1("Dashboard Consolidado FullStack", className="text-center text-primary my-4"))),
         dbc.Card(dbc.CardBody([
@@ -138,7 +138,7 @@ if datos_cargados_correctamente:
             dbc.Tab(label="Gráficos", children=[dbc.Row(id='tarjetas-kpi-graficos', className="my-4 g-4"), dbc.Row([dbc.Col(dbc.Card(dcc.Graph(id='grafico-torta-torre'), className="shadow-sm"), md=6), dbc.Col(dbc.Card(dcc.Graph(id='grafico-barras-resolutividad'), className="shadow-sm"), md=6)], className="my-4"), dbc.Row([dbc.Col(dbc.Card(dcc.Graph(id='grafico-volumen-ejecutivo'), className="shadow-sm"), md=6), dbc.Col(dbc.Card(dcc.Graph(id='grafico-composicion-status'), className="shadow-sm"), md=6)], className="my-4")]),
             dbc.Tab(label="Ranking KPI", children=[
                 dbc.Row([
-                    dbc.Col(html.H3("Ranking de Ejecutivos Clave", className="mt-4 mb-3 border-bottom pb-2 text-primary"), width=12, className="text-center")
+                    dbc.Col(html.H3("Ranking de Ejecutivos KPI", className="mt-4 mb-3 border-bottom pb-2 text-primary"), width=12, className="text-center")
                 ]),
                 dbc.Row([
                     dbc.Col(id='kpi-ranking-container', md=5),
@@ -272,19 +272,17 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
     if torres: dff = dff[dff[COLUMNA_TORRE].isin(torres)]
     if ejecutivos: dff = dff[dff[COLUMNA_ANALISTA].isin(ejecutivos)]
 
-    # Bloque `if dff.empty:` CORREGIDO
     if dff.empty:
         empty_df_dict = [{'Nota': 'No hay datos para los filtros seleccionados'}]
         empty_cols = [{'name': 'Nota', 'id': 'Nota'}]
         no_data_msg = [dbc.Col(dbc.Alert("No hay datos para mostrar con los filtros seleccionados.", color="warning"), width=12)]
         empty_fig = {'layout': {'xaxis': {'visible': False}, 'yaxis': {'visible': False}, 'annotations': [{'text': 'No data', 'showarrow': False}]}}
-        empty_data = pd.DataFrame().to_json(orient='split') # Define empty_data aquí
+        empty_data = pd.DataFrame().to_json(orient='split')
         return (empty_df_dict, empty_cols, empty_df_dict, empty_cols, empty_df_dict, empty_cols,
                 empty_df_dict, empty_cols, empty_df_dict, empty_cols, 
                 no_data_msg, no_data_msg, no_data_msg,
                 empty_fig, empty_fig, empty_fig, empty_fig, 
-                no_data_msg, no_data_msg, 
-                empty_data, empty_data, empty_data) # Devuelve empty_data para los 3 stores
+                no_data_msg, no_data_msg, empty_data, empty_data, empty_data) 
 
     all_months_ordered_local = sorted(df_principal['Mes'].unique(), key=lambda m: pd.to_datetime(f'01-{m}-2025', format='%d-%B-%Y').month)
     
@@ -380,12 +378,32 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         total_ordenes_kpi = df_kpi.groupby(COLUMNA_ANALISTA)[COLUMNA_ORDEN].count()
         ordenes_corregidas_kpi = df_kpi[df_kpi[COLUMNA_STATUS] == 'Corregido'].groupby(COLUMNA_ANALISTA)[COLUMNA_ORDEN].count()
         
-        kpi_ranking = (ordenes_corregidas_kpi / total_ordenes_kpi).fillna(0).sort_values(ascending=False)
-        df_kpi_resolutividad = kpi_ranking.reset_index()
-        df_kpi_resolutividad.columns = ['Ejecutivo', 'Resolutividad']
+        # --- LÓGICA CORREGIDA PARA EL RANKING ---
+        # 1. Crear el DataFrame de ranking
+        df_ranking = pd.DataFrame({
+            'Asignadas': total_ordenes_kpi,
+            'Corregidas': ordenes_corregidas_kpi
+        })
+        df_ranking['Corregidas'] = df_ranking['Corregidas'].fillna(0).astype(int)
+        df_ranking['Resolutividad'] = (df_ranking['Corregidas'] / df_ranking['Asignadas']).fillna(0)
+
+        # 2. Ordenar por Resolutividad (desc), luego por Corregidas (desc)
+        df_ranking_sorted = df_ranking.sort_values(
+            by=['Resolutividad', 'Corregidas'],
+            ascending=[False, False]
+        )
         
+        # 3. Preparar datos para descarga
+        df_kpi_resolutividad_download = df_ranking_sorted[['Resolutividad']].reset_index()
+        df_kpi_resolutividad_download.columns = ['Ejecutivo', 'Resolutividad']
+        
+        df_kpi_cantidad_download = df_ranking_sorted[['Corregidas', 'Asignadas']].reset_index()
+        df_kpi_cantidad_download.columns = ['Ejecutivo', 'Corregidas', 'Asignadas']
+
+        # 4. Generar Tarjeta 1: Ranking de Resolutividad
         ranking_items = []
-        for i, (ejecutivo, score) in enumerate(kpi_ranking.items()):
+        for i, (ejecutivo, row) in enumerate(df_ranking_sorted.iterrows()):
+            score = row['Resolutividad']
             color = "success" if i == 0 else "info" if i == 1 else "primary" if i == 2 else "secondary"
             icon = "bi bi-trophy-fill" if i == 0 else "bi bi-award-fill" if i == 1 else "bi bi-star-fill"
             ranking_items.append(
@@ -399,19 +417,12 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
             dbc.ListGroup(ranking_items, flush=True, className="border-0")
         ]), className="shadow-sm border-0 rounded-lg")
         
-        df_kpi_cantidad = pd.DataFrame({
-            'Ejecutivo': kpi_ranking.index, 
-            'Corregidas': ordenes_corregidas_kpi.reindex(kpi_ranking.index, fill_value=0).values,
-            'Asignadas': total_ordenes_kpi.reindex(kpi_ranking.index, fill_value=0).values
-        })
-        
+        # 5. Generar Tarjeta 2: Detalle de Gestiones (ya está ordenada por el loop)
         quantity_items = []
-        for index, row in df_kpi_cantidad.iterrows():
-            ejecutivo = row['Ejecutivo']
+        for ejecutivo, row in df_ranking_sorted.iterrows():
             corregidas = row['Corregidas']
             asignadas = row['Asignadas']
-            
-            porcentaje = (corregidas / asignadas) if asignadas > 0 else 0
+            porcentaje = row['Resolutividad']
             
             quantity_items.append(
                 dbc.ListGroupItem([
@@ -428,15 +439,12 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
             dbc.ListGroup(quantity_items, flush=True, className="border-0")
         ]), className="shadow-sm border-0 rounded-lg")
         
-        # Preparar datos para descarga
-        df_kpi_cantidad_download = df_kpi_cantidad # Asegurarse de usar la variable correcta
-        
     else:
         alert_msg = dbc.Alert("No hay datos para generar el ranking KPI con los ejecutivos y filtros seleccionados.", color="info")
         kpi_ranking_card = alert_msg
         kpi_quantity_card = alert_msg
-        df_kpi_resolutividad = pd.DataFrame()
-        df_kpi_cantidad_download = pd.DataFrame() 
+        df_kpi_resolutividad_download = pd.DataFrame()
+        df_kpi_cantidad_download = pd.DataFrame()
     
     return (
         data_mensual, cols_mensual, 
@@ -448,7 +456,7 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         fig_torta_torre, fig_bar_resolutividad, fig_volumen_ejec, fig_composicion_status,
         kpi_ranking_card,
         kpi_quantity_card,
-        df_kpi_resolutividad.to_json(orient='split', index=False),
+        df_kpi_resolutividad_download.to_json(orient='split', index=False),
         df_kpi_cantidad_download.to_json(orient='split', index=False),
         dff.to_json(date_format='iso', orient='split')
     )
@@ -572,7 +580,7 @@ def download_ranking_excel(n_clicks, json_resolutividad, json_cantidad, json_con
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_resolutividad.to_excel(writer, sheet_name='Ranking Resolutividad', index=False)
-        df_cantidad.to_excel(writer, sheet_name='Ranking Cantidad', index=False)
+        df_cantidad.to_excel(writer, sheet_name='Ranking Detalle', index=False) # Nombre de hoja corregido
         df_consolidado.to_excel(writer, sheet_name='Consolidado Filtrado', index=False)
     
     output.seek(0)
