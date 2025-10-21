@@ -33,5 +33,8 @@ MANIFEST
 env/
 venv/
 ENV/
+
 env.bak/
 venv.bak/
+dashboard-kpi-475718-6d067eb02488.json
+Backup.py

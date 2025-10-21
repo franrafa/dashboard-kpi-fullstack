@@ -45,6 +45,7 @@ EJECUTIVOS_KPI_RANKING = [
 
 # --- 2. FUNCIÓN DE CARGA DE DATOS ---
 def cargar_datos_desde_db():
+    # --- Lee las variables de entorno justo cuando se necesitan ---
     USUARIO = os.environ.get("USUARIO")
     CONTRASENA = os.environ.get("CONTRASENA")
     HOST = os.environ.get("HOST")
@@ -53,7 +54,13 @@ def cargar_datos_desde_db():
 
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Conectando a la base de datos en la nube...")
     
-    cadena_conexion = f"mysql+pymysql://{USUARIO}:{CONTRASENA}@{HOST}:{PUERTO}/{BASE_DE_DATOS}"
+    # Lee la URL de la base de datos desde los secretos
+    cadena_conexion = os.environ.get("DATABASE_URL")
+    
+    if not cadena_conexion:
+        print("ERROR: No se encontró la variable de entorno DATABASE_URL.")
+        raise ValueError("No se encontró la variable de entorno DATABASE_URL")
+
     engine = create_engine(
         cadena_conexion,
         pool_recycle=3600,
@@ -65,7 +72,8 @@ def cargar_datos_desde_db():
     
     print(f"Se han leído {len(df_dashboard)} filas de la base de datos.")
 
-    df_dashboard[COLUMNA_FECHA] = pd.to_datetime(df_dashboard[COLUMNA_FECHA], errors='coerce')
+    # Convertir fechas, especificando que el día va primero
+    df_dashboard[COLUMNA_FECHA] = pd.to_datetime(df_dashboard[COLUMNA_FECHA], dayfirst=True, errors='coerce')
     df_dashboard.dropna(subset=[COLUMNA_FECHA, COLUMNA_ANALISTA, COLUMNA_TORRE, COLUMNA_STATUS], inplace=True)
     df_dashboard = df_dashboard[df_dashboard[COLUMNA_FECHA].dt.month >= 8]
     df_dashboard.sort_values(by=COLUMNA_FECHA, inplace=True)
@@ -114,7 +122,7 @@ if datos_cargados_correctamente:
         dcc.Store(id='store-download-raw-data'),
         dcc.Store(id='store-kpi-resolutividad-data'),
         dcc.Store(id='store-kpi-cantidad-data'),
-        dcc.Store(id='store-filtered-data'),
+        dcc.Store(id='store-filtered-data'), 
         
         dbc.Row(dbc.Col(html.H1("Dashboard Consolidado FullStack", className="text-center text-primary my-4"))),
         dbc.Card(dbc.CardBody([
@@ -138,7 +146,7 @@ if datos_cargados_correctamente:
             dbc.Tab(label="Gráficos", children=[dbc.Row(id='tarjetas-kpi-graficos', className="my-4 g-4"), dbc.Row([dbc.Col(dbc.Card(dcc.Graph(id='grafico-torta-torre'), className="shadow-sm"), md=6), dbc.Col(dbc.Card(dcc.Graph(id='grafico-barras-resolutividad'), className="shadow-sm"), md=6)], className="my-4"), dbc.Row([dbc.Col(dbc.Card(dcc.Graph(id='grafico-volumen-ejecutivo'), className="shadow-sm"), md=6), dbc.Col(dbc.Card(dcc.Graph(id='grafico-composicion-status'), className="shadow-sm"), md=6)], className="my-4")]),
             dbc.Tab(label="Ranking KPI", children=[
                 dbc.Row([
-                    dbc.Col(html.H3("Ranking de Ejecutivos KPI", className="mt-4 mb-3 border-bottom pb-2 text-primary"), width=12, className="text-center")
+                    dbc.Col(html.H3("Ranking de Ejecutivos Clave", className="mt-4 mb-3 border-bottom pb-2 text-primary"), width=12, className="text-center")
                 ]),
                 dbc.Row([
                     dbc.Col(id='kpi-ranking-container', md=5),
@@ -378,29 +386,20 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         total_ordenes_kpi = df_kpi.groupby(COLUMNA_ANALISTA)[COLUMNA_ORDEN].count()
         ordenes_corregidas_kpi = df_kpi[df_kpi[COLUMNA_STATUS] == 'Corregido'].groupby(COLUMNA_ANALISTA)[COLUMNA_ORDEN].count()
         
-        # --- LÓGICA CORREGIDA PARA EL RANKING ---
-        # 1. Crear el DataFrame de ranking
         df_ranking = pd.DataFrame({
             'Asignadas': total_ordenes_kpi,
-            'Corregidas': ordenes_corregidas_kpi
+            'Corregidas': ordenes_corregidas_kpi.reindex(total_ordenes_kpi.index, fill_value=0)
         })
-        df_ranking['Corregidas'] = df_ranking['Corregidas'].fillna(0).astype(int)
         df_ranking['Resolutividad'] = (df_ranking['Corregidas'] / df_ranking['Asignadas']).fillna(0)
-
-        # 2. Ordenar por Resolutividad (desc), luego por Corregidas (desc)
-        df_ranking_sorted = df_ranking.sort_values(
-            by=['Resolutividad', 'Corregidas'],
-            ascending=[False, False]
-        )
         
-        # 3. Preparar datos para descarga
+        df_ranking_sorted = df_ranking.sort_values(by=['Resolutividad', 'Corregidas'], ascending=[False, False])
+        
         df_kpi_resolutividad_download = df_ranking_sorted[['Resolutividad']].reset_index()
         df_kpi_resolutividad_download.columns = ['Ejecutivo', 'Resolutividad']
         
         df_kpi_cantidad_download = df_ranking_sorted[['Corregidas', 'Asignadas']].reset_index()
         df_kpi_cantidad_download.columns = ['Ejecutivo', 'Corregidas', 'Asignadas']
 
-        # 4. Generar Tarjeta 1: Ranking de Resolutividad
         ranking_items = []
         for i, (ejecutivo, row) in enumerate(df_ranking_sorted.iterrows()):
             score = row['Resolutividad']
@@ -417,7 +416,6 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
             dbc.ListGroup(ranking_items, flush=True, className="border-0")
         ]), className="shadow-sm border-0 rounded-lg")
         
-        # 5. Generar Tarjeta 2: Detalle de Gestiones (ya está ordenada por el loop)
         quantity_items = []
         for ejecutivo, row in df_ranking_sorted.iterrows():
             corregidas = row['Corregidas']
@@ -444,7 +442,7 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         kpi_ranking_card = alert_msg
         kpi_quantity_card = alert_msg
         df_kpi_resolutividad_download = pd.DataFrame()
-        df_kpi_cantidad_download = pd.DataFrame()
+        df_kpi_cantidad_download = pd.DataFrame() 
     
     return (
         data_mensual, cols_mensual, 
@@ -580,7 +578,7 @@ def download_ranking_excel(n_clicks, json_resolutividad, json_cantidad, json_con
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df_resolutividad.to_excel(writer, sheet_name='Ranking Resolutividad', index=False)
-        df_cantidad.to_excel(writer, sheet_name='Ranking Detalle', index=False) # Nombre de hoja corregido
+        df_cantidad.to_excel(writer, sheet_name='Ranking Detalle', index=False)
         df_consolidado.to_excel(writer, sheet_name='Consolidado Filtrado', index=False)
     
     output.seek(0)
