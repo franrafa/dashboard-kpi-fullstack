@@ -45,7 +45,6 @@ EJECUTIVOS_KPI_RANKING = [
 
 # --- 2. FUNCIÓN DE CARGA DE DATOS ---
 def cargar_datos_desde_db():
-    # --- Lee las variables de entorno justo cuando se necesitan ---
     USUARIO = os.environ.get("USUARIO")
     CONTRASENA = os.environ.get("CONTRASENA")
     HOST = os.environ.get("HOST")
@@ -54,7 +53,6 @@ def cargar_datos_desde_db():
 
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Conectando a la base de datos en la nube...")
     
-    # Lee la URL de la base de datos desde los secretos
     cadena_conexion = os.environ.get("DATABASE_URL")
     
     if not cadena_conexion:
@@ -72,7 +70,6 @@ def cargar_datos_desde_db():
     
     print(f"Se han leído {len(df_dashboard)} filas de la base de datos.")
 
-    # Convertir fechas, especificando que el día va primero
     df_dashboard[COLUMNA_FECHA] = pd.to_datetime(df_dashboard[COLUMNA_FECHA], dayfirst=True, errors='coerce')
     df_dashboard.dropna(subset=[COLUMNA_FECHA, COLUMNA_ANALISTA, COLUMNA_TORRE, COLUMNA_STATUS], inplace=True)
     df_dashboard = df_dashboard[df_dashboard[COLUMNA_FECHA].dt.month >= 8]
@@ -326,7 +323,7 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
     _, data_ejecutivo_conteo, cols_ejecutivo_conteo = crear_tabla_conteo_diario(dff, COLUMNA_ANALISTA, date_range_for_tables)
     _, data_ejecutivo_porcentaje, cols_ejecutivo_porcentaje = crear_tabla_porcentaje_corregido(dff, COLUMNA_ANALISTA, date_range_for_tables)
 
-    dias_trabajados = dff[COLUMNA_FECHA].dt.normalize().nunique()
+    dias_trabajados_dinamico = dff[COLUMNA_FECHA].dt.normalize().nunique()
     gestion_totales = dff[COLUMNA_ORDEN].count()
     total_ejecutivos = dff[COLUMNA_ANALISTA].nunique()
     
@@ -335,8 +332,10 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
     gestiones_atendidas = f"{gestiones_atendidas_raw:.2%}"
 
     gestion_fte_dia = 0
-    if dias_trabajados > 0 and total_ejecutivos > 0:
-        gestion_fte_dia = round(((gestion_totales - total_capacidad) / dias_trabajados) / total_ejecutivos)
+    # --- CÁLCULO CORREGIDO: Usando la regla de negocio de 6 días ---
+    dias_trabajados_regla = 6 
+    if dias_trabajados_regla > 0 and total_ejecutivos > 0:
+        gestion_fte_dia = round(((gestion_totales - total_capacidad) / dias_trabajados_regla) / total_ejecutivos)
     
     total_corregido = dff[dff[COLUMNA_STATUS] == 'Corregido'][COLUMNA_ORDEN].count()
     tasa_resolutividad_raw = (total_corregido / gestion_totales) if gestion_totales > 0 else 0
