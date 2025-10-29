@@ -45,7 +45,6 @@ EJECUTIVOS_KPI_RANKING = [
 
 # --- 2. FUNCIÓN DE CARGA DE DATOS ---
 def cargar_datos_desde_db():
-    # --- Lee las variables de entorno justo cuando se necesitan ---
     USUARIO = os.environ.get("USUARIO")
     CONTRASENA = os.environ.get("CONTRASENA")
     HOST = os.environ.get("HOST")
@@ -71,13 +70,12 @@ def cargar_datos_desde_db():
     
     print(f"Se han leído {len(df_dashboard)} filas de la base de datos.")
 
-    # Convertir fechas, especificando que el día va primero
     df_dashboard[COLUMNA_FECHA] = pd.to_datetime(df_dashboard[COLUMNA_FECHA], dayfirst=True, errors='coerce')
     df_dashboard.dropna(subset=[COLUMNA_FECHA, COLUMNA_ANALISTA, COLUMNA_TORRE, COLUMNA_STATUS], inplace=True)
     
     # --- LÍNEA DE FILTRO DE MES ELIMINADA ---
     # df_dashboard = df_dashboard[df_dashboard[COLUMNA_FECHA].dt.month >= 8] # <-- ESTA LÍNEA HA SIDO ELIMINADA
-    
+
     df_dashboard.sort_values(by=COLUMNA_FECHA, inplace=True)
     df_dashboard['Mes'] = df_dashboard[COLUMNA_FECHA].dt.strftime('%B').str.capitalize()
     df_dashboard['Year'] = df_dashboard[COLUMNA_FECHA].dt.isocalendar().year
@@ -98,7 +96,11 @@ auth = dash_auth.BasicAuth(app, VALID_USERNAME_PASSWORD_PAIRS)
 # --- Carga inicial de datos ---
 try:
     df_principal = cargar_datos_desde_db()
-    meses_disponibles = sorted(df_principal['Mes'].unique(), key=lambda m: pd.to_datetime(f'01-{m}-2025', format='%d-%B-%Y').month)
+    # Ordenar los meses cronológicamente
+    df_principal['Mes_Num'] = df_principal[COLUMNA_FECHA].dt.month
+    meses_ordenados = df_principal[['Mes', 'Mes_Num']].drop_duplicates().sort_values('Mes_Num')
+    meses_disponibles = meses_ordenados['Mes'].tolist()
+    
     week_map = df_principal[['Semana_Num', 'WeekLabel']].drop_duplicates().sort_values('Semana_Num')
     semanas_disponibles_options = week_map.apply(lambda row: {'label': row['WeekLabel'], 'value': row['Semana_Num']}, axis=1).tolist()
     ejecutivos_disponibles = sorted(df_principal[COLUMNA_ANALISTA].unique())
@@ -576,7 +578,7 @@ def download_ranking_excel(n_clicks, json_resolutividad, json_cantidad, json_con
     if not df_consolidado.empty:
         df_consolidado[COLUMNA_FECHA] = pd.to_datetime(df_consolidado[COLUMNA_FECHA]).dt.date
         cols_to_drop = ['Year', 'Semana_Num', 'WeekStartDate', 'WeekEndDate', 'WeekLabel']
-        df_consolidado = df_consolidado.drop(columns=[col for col in df_consolidado.columns])
+        df_consolidado = df_consolidado.drop(columns=[col for col in cols_to_drop if col in df_consolidado.columns])
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
