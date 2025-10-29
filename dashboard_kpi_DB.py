@@ -45,6 +45,7 @@ EJECUTIVOS_KPI_RANKING = [
 
 # --- 2. FUNCIÓN DE CARGA DE DATOS ---
 def cargar_datos_desde_db():
+    # --- Lee las variables de entorno justo cuando se necesitan ---
     USUARIO = os.environ.get("USUARIO")
     CONTRASENA = os.environ.get("CONTRASENA")
     HOST = os.environ.get("HOST")
@@ -70,9 +71,13 @@ def cargar_datos_desde_db():
     
     print(f"Se han leído {len(df_dashboard)} filas de la base de datos.")
 
+    # Convertir fechas, especificando que el día va primero
     df_dashboard[COLUMNA_FECHA] = pd.to_datetime(df_dashboard[COLUMNA_FECHA], dayfirst=True, errors='coerce')
     df_dashboard.dropna(subset=[COLUMNA_FECHA, COLUMNA_ANALISTA, COLUMNA_TORRE, COLUMNA_STATUS], inplace=True)
-    df_dashboard = df_dashboard[df_dashboard[COLUMNA_FECHA].dt.month >= 8]
+    
+    # --- LÍNEA DE FILTRO DE MES ELIMINADA ---
+    # df_dashboard = df_dashboard[df_dashboard[COLUMNA_FECHA].dt.month >= 8] # <-- ESTA LÍNEA HA SIDO ELIMINADA
+    
     df_dashboard.sort_values(by=COLUMNA_FECHA, inplace=True)
     df_dashboard['Mes'] = df_dashboard[COLUMNA_FECHA].dt.strftime('%B').str.capitalize()
     df_dashboard['Year'] = df_dashboard[COLUMNA_FECHA].dt.isocalendar().year
@@ -332,7 +337,6 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
     gestiones_atendidas = f"{gestiones_atendidas_raw:.2%}"
 
     gestion_fte_dia = 0
-    # --- CÁLCULO CORREGIDO: Usando la regla de negocio de 6 días ---
     dias_trabajados_regla = 6 
     if dias_trabajados_regla > 0 and total_ejecutivos > 0:
         gestion_fte_dia = round(((gestion_totales - total_capacidad) / dias_trabajados_regla) / total_ejecutivos)
@@ -572,7 +576,7 @@ def download_ranking_excel(n_clicks, json_resolutividad, json_cantidad, json_con
     if not df_consolidado.empty:
         df_consolidado[COLUMNA_FECHA] = pd.to_datetime(df_consolidado[COLUMNA_FECHA]).dt.date
         cols_to_drop = ['Year', 'Semana_Num', 'WeekStartDate', 'WeekEndDate', 'WeekLabel']
-        df_consolidado = df_consolidado.drop(columns=[col for col in cols_to_drop if col in df_consolidado.columns])
+        df_consolidado = df_consolidado.drop(columns=[col for col in df_consolidado.columns])
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:

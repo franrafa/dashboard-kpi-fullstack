@@ -1,112 +1,56 @@
-# 📊 Dashboard KPI Fullstack
+# Dashboard KPI FullStack Interactivo
 
-Sistema automatizado para visualizar KPIs actualizados desde una hoja de Google Sheets.  
-Los datos se sincronizan cada **15 minutos** y se muestran en un **dashboard interactivo** alojado en la nube.
+Este es un dashboard interactivo de KPIs (Key Performance Indicators) construido con Dash y Plotly. La aplicación visualiza datos de gestión de órdenes, permitiendo a los usuarios filtrar y analizar el rendimiento por torre, ejecutivo, mes y semana.
 
-✅ **Tu única tarea**: actualizar los datos en Google Sheets.  
-🔁 **El resto es 100% automático**.
+El sistema está completamente automatizado y alojado en la nube.
 
--------------------------------------------------------------------------------------------------------------------------------------------------
+**Ver el Dashboard en Vivo:** [https://dashboard-kpi-fullstack.onrender.com](https://dashboard-kpi-fullstack.onrender.com)
 
-## 🔄 Arquitectura del Sistema
+---
 
-El sistema se compone de **dos flujos independientes pero integrados**:  
-1. **Pipeline de datos automático** (cada 15 minutos).  
-2. **Dashboard interactivo** (cuando un usuario visita la URL).
+## 🚀 Características Principales
 
+* **Autenticación de Usuarios:** Acceso protegido por nombre de usuario y contraseña.
+* **Tarjetas de KPIs Dinámicas:** Métricas clave (Gestiones Totales, Tasa de Resolutividad, Gestión FTE Día) que se actualizan con los filtros.
+* **Filtros Interactivos:** Filtra datos por Mes, Quincena/Semana, Torre y Ejecutivo.
+* **Tablas Detalladas:** Vistas de resumen por Mes, Día, Torre y Status.
+* **Gráficos Interactivos:** Gráficos de pastel y barras para visualizar la distribución del trabajo.
+* **Ranking de Ejecutivos Clave:** Una pestaña dedicada para comparar el rendimiento de los ejecutivos (Resolutividad y Volumen).
+* **Descargas Múltiples:**
+    * Descarga de los datos detallados (Consolidado) con filtros aplicados.
+    * Descarga de los rankings KPI en un archivo Excel con múltiples hojas.
 
-```plaintext
-                                 ┌──────────────────┐     ┌──────────────────┐
-                                 │                  │     │                  │
-                                 │   TÚ (ACTUALIZAS │     │   USUARIO FINAL  │
-                                 │   DATOS EN       │     │   (VISITA URL)   │
-                                 │   GOOGLE SHEETS) │     │                  │
-                                 └─────────┬────────┘     └─────────┬────────┘
-                                           │                        │
-                                           │                        │
-                                           ▼                        ▼
-                                 ┌─────────┴────────┐     ┌─────────┴────────┐
-                                 │                  │     │                  │
-                                 │   GOOGLE SHEETS  │◄────┤    RENDER        │
-                                 │   (Fuente de     │     │    (App Dash)    │
-                                 │    Datos Maestra)│     │                  │
-                                 └─────────┬────────┘     └─────────▲────────┘
-                                           │                        │
-                                           │ (API vía SA)           │ (Consulta DB)
-                                           ▼                        │
-                                 ┌─────────┴────────┐               │
-                                 │                  │               │
-                                 │   GITHUB ACTIONS │───────────────┘
-                                 │   (ETL Automático│
-                                 │    cada 15 min)  │
-                                 └─────────┬────────┘
-                                           │
-                                           │ (Escribe en DB)
-                                           ▼
-                                 ┌─────────┴────────────────────┐
-                                 │                              │
-                                 │   RAILWAY                    │
-                                 │   (MySQL)                    │
-                                 │   • Tabla:                   │
-                                 │     consolidado_fullstack    │
-                                 └──────────────────────────────┘
-```
+---
 
+## ⚙️ Arquitectura y Flujo de Datos Automatizado
 
-> 🔑 **Leyenda**:  
-> - **Flechas**: dirección del flujo de datos.  
-> - **GitHub Actions**: proceso programado (no interactivo).  
-> - **Render**: servicio que aloja la app Dash.  
-> - **Railway**: base de datos MySQL gestionada.
+Este proyecto utiliza una arquitectura de CI/CD (Integración Continua/Despliegue Continuo) para la automatización completa del flujo de datos, desde la fuente hasta la visualización.
 
--------------------------------------------------------------------------------------------------------------------------------------------------
+1.  **Fuente de Datos (Google Sheets):** Los datos maestros se actualizan y mantienen en una **Hoja de Cálculo de Google** privada.
+2.  **ETL Automatizado (GitHub Actions):** Un "robot" (flujo de trabajo de GitHub Actions) se despierta **cada 15 minutos**.
+3.  **Extracción y Carga:** El robot ejecuta el script `migrar_datos.py`, se conecta de forma segura a la API de Google Sheets, extrae los datos, los limpia y los carga en la base de datos de producción.
+4.  **Base de Datos (Railway):** Una base de datos **MySQL** alojada en Railway sirve como el almacén de datos (Data Warehouse) para la aplicación.
+5.  **Aplicación Web (Render):** La aplicación Dash (`dashboard_kpi_DB.py`) está alojada en Render. **No lee archivos locales**.
+6.  **Visualización:** Cuando un usuario carga el dashboard, la aplicación en Render consulta la base de datos de Railway en tiempo real para mostrar los datos más frescos.
+7.  **Auto-Actualización:** El dashboard también incluye un `dcc.Interval` que vuelve a consultar la base de datos cada minuto, asegurando que los nuevos datos cargados por el robot de GitHub se reflejen sin necesidad de recargar la página.
 
+### Tu Nuevo Flujo de Trabajo
+* **Para Actualizar DATOS:** Simplemente edita la **Hoja de Cálculo de Google**. El sistema se actualizará solo.
+* **Para Actualizar CÓDIGO:** Sube los cambios de los archivos `.py` a GitHub.
 
-### 🤖 Flujo 1: Pipeline de Datos (ETL Automático)
+---
 
-Este flujo se ejecuta **sin intervención humana** cada 15 minutos:
+## 🛠️ Stack Tecnológico
 
-1. **Disparo**: GitHub Actions se activa mediante un cron job (`*/15 * * * *`).
-2. **Lectura**: Usa las credenciales seguras (`GCP_SA_KEY` y `SHEET_ID`) para leer datos desde Google Sheets vía API.
-3. **Carga**: El script [`migrar_datos.py`](./migrar_datos.py) conecta a la base de datos en Railway (usando `DATABASE_URL`) y **reemplaza completamente** la tabla `consolidado_fullstack`.
-4. **Resultado**: La base de datos siempre refleja el estado más reciente de tu hoja maestra.
+* **Python**
+* **Framework Web:** Dash, Plotly
+* **Análisis de Datos:** Pandas
+* **Base de Datos:** MySQL (alojada en Railway)
+* **Fuente de Datos:** Google Sheets API
+* **Hosting de Aplicación:** Render
+* **Automatización (CI/CD):** GitHub Actions
+* **Servidor de Producción:** Gunicorn
 
-✅ **Tu única tarea manual**: actualizar los datos en Google Sheets.
-
--------------------------------------------------------------------------------------------------------------------------------------------------
-
-### 🖥️ Flujo 2: Dashboard Web (Interacción del Usuario)
-
-Cuando un usuario accede a [https://dashboard-kpi-fullstack.onrender.com](https://dashboard-kpi-fullstack.onrender.com):
-
-1. **Autenticación**: Render solicita credenciales básicas (`dash_auth`).
-2. **Carga de datos**: La app Dash (`dashboard_kpi_DB.py`) se conecta a Railway usando la variable de entorno `DATABASE_URL`.
-3. **Visualización**: Los datos se leen de la tabla `consolidado_fullstack` y se renderizan como gráficos interactivos en el navegador.
-
-💡 **Ventaja clave**: el dashboard **nunca consulta Google Sheets directamente**, lo que mejora rendimiento, seguridad y confiabilidad.
-
--------------------------------------------------------------------------------------------------------------------------------------------------
-
-### ✅ Beneficios del Diseño
-
-- **Automatización total** tras la actualización manual en Sheets.
-- **Separación de capas**: fuente de datos, procesamiento, almacenamiento y presentación.
-- **Seguridad**: credenciales sensibles nunca están en el código (usadas como secretos en GitHub/Render).
-- **Escalable**: fácil de adaptar a otras fuentes de datos o servicios de hosting.
-
--------------------------------------------------------------------------------------------------------------------------------------------------
-
-### 🛠️ Tecnologías Utilizadas
-
-| Capa               | Tecnología                |
-|--------------------|---------------------------|
-| Fuente de datos    | Google Sheets             |
-| Orquestación ETL   | GitHub Actions            |
-| Base de datos      | Railway (MySQL)           |
-| Aplicación web     | Plotly Dash en Render     |
-| Autenticación      | `dash_auth` (HTTP Basic)  |
-
--------------------------------------------------------------------------------------------------------------------------------------------------
 
 ### 📁 Estructura del Proyecto
 ├── migrar_datos.py # Script ETL: Sheets → Railway
@@ -129,9 +73,9 @@ Cuando un usuario accede a [https://dashboard-kpi-fullstack.onrender.com](https:
 |               | `DASH_PASSWORD`  | Contraseña para autenticación básica         |
 
 
--------------------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------------------------------------
 
 > 📌 **Nota**: Este sistema está diseñado para **simplicidad, mantenibilidad y bajo costo**. Ideal para KPIs operativos actualizados periódicamente.
 
--------------------------------------------------------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------------------------------------
 
