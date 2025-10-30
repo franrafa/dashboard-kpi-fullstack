@@ -34,12 +34,24 @@ VALID_USERNAME_PASSWORD_PAIRS = {'haintech': 'dashboard2025'}
 # --- EJECUTIVOS PARA EL RANKING KPI ---
 EJECUTIVOS_KPI_RANKING = [
     "Miguel Mantilla",
-    "Miguel Aravena",
-    "Nilsson Diaz",
-    "Francisco Narvaez",
-    "Carlos Quezada",
-    "Gia Marin",
-    "Marcos Coyan"
+"Miguel Aravena",
+"Francisco Narvaez",
+"Gia Marin",
+"Nilsson Diaz",
+"Carlos Quezada",
+"Marcos Coyan",
+"Excel Parra",
+"Felipe Tenorio",
+"Virginia Hernandez",
+"Christofer Villagran",
+"Miguel Paredes",
+"Merlyn Pulido",
+"Viviana Alvarado",
+"Maribel Martínez",
+"Igor Parra",
+"Yasna Coyan",
+"Manuel Pabón",
+"Michell Fernández"
 ]
 
 
@@ -74,8 +86,8 @@ def cargar_datos_desde_db():
     df_dashboard.dropna(subset=[COLUMNA_FECHA, COLUMNA_ANALISTA, COLUMNA_TORRE, COLUMNA_STATUS], inplace=True)
     
     # --- LÍNEA DE FILTRO DE MES ELIMINADA ---
-    # df_dashboard = df_dashboard[df_dashboard[COLUMNA_FECHA].dt.month >= 8] # <-- ESTA LÍNEA HA SIDO ELIMINADA
-
+    # df_dashboard = df_dashboard[df_dashboard[COLUMNA_FECHA].dt.month >= 8] 
+    
     df_dashboard.sort_values(by=COLUMNA_FECHA, inplace=True)
     df_dashboard['Mes'] = df_dashboard[COLUMNA_FECHA].dt.strftime('%B').str.capitalize()
     df_dashboard['Year'] = df_dashboard[COLUMNA_FECHA].dt.isocalendar().year
@@ -96,7 +108,7 @@ auth = dash_auth.BasicAuth(app, VALID_USERNAME_PASSWORD_PAIRS)
 # --- Carga inicial de datos ---
 try:
     df_principal = cargar_datos_desde_db()
-    # Ordenar los meses cronológicamente
+    
     df_principal['Mes_Num'] = df_principal[COLUMNA_FECHA].dt.month
     meses_ordenados = df_principal[['Mes', 'Mes_Num']].drop_duplicates().sort_values('Mes_Num')
     meses_disponibles = meses_ordenados['Mes'].tolist()
@@ -334,18 +346,30 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
     gestion_totales = dff[COLUMNA_ORDEN].count()
     total_ejecutivos = dff[COLUMNA_ANALISTA].nunique()
     
+    # --- CÁLCULOS DE KPI CON NUEVAS FÓRMULAS ---
     total_capacidad = dff[dff[COLUMNA_STATUS] == 'Capacidad'][COLUMNA_ORDEN].count()
-    gestiones_atendidas_raw = (gestion_totales - total_capacidad) / gestion_totales if gestion_totales > 0 else 0
+    total_corregido_otro_equipo = dff[dff[COLUMNA_STATUS] == 'Corregido por otro Equipo'][COLUMNA_ORDEN].count()
+    
+    # 1. Gestiones Atendidas
+    gestiones_atendidas_numerador = gestion_totales - total_capacidad - total_corregido_otro_equipo
+    gestiones_atendidas_raw = (gestiones_atendidas_numerador / gestion_totales) if gestion_totales > 0 else 0
     gestiones_atendidas = f"{gestiones_atendidas_raw:.2%}"
 
+    # 2. Tasa de Resolutividad
+    total_corregido = dff[dff[COLUMNA_STATUS] == 'Corregido'][COLUMNA_ORDEN].count()
+    total_flujo = dff[dff[COLUMNA_STATUS] == 'Flujo'][COLUMNA_ORDEN].count()
+    tasa_resolutividad_numerador = total_corregido + total_flujo
+    tasa_resolutividad_raw = (tasa_resolutividad_numerador / gestion_totales) if gestion_totales > 0 else 0
+    tasa_resolutividad = f"{tasa_resolutividad_raw:.2%}"
+
+    # 3. Gestión FTE Día
     gestion_fte_dia = 0
     dias_trabajados_regla = 6 
     if dias_trabajados_regla > 0 and total_ejecutivos > 0:
-        gestion_fte_dia = round(((gestion_totales - total_capacidad) / dias_trabajados_regla) / total_ejecutivos)
+        # Usamos el numerador de Gestiones Atendidas para este cálculo
+        gestion_fte_dia = round((gestiones_atendidas_numerador / dias_trabajados_regla) / total_ejecutivos)
     
-    total_corregido = dff[dff[COLUMNA_STATUS] == 'Corregido'][COLUMNA_ORDEN].count()
-    tasa_resolutividad_raw = (total_corregido / gestion_totales) if gestion_totales > 0 else 0
-    tasa_resolutividad = f"{tasa_resolutividad_raw:.2%}"
+    # --- FIN DE CÁLCULOS DE KPI ---
 
     def crear_tarjeta_kpi(titulo, valor, color_valor="primary", icon="bi bi-info-circle"):
         return dbc.Col(dbc.Card(dbc.CardBody([
