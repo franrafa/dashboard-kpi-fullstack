@@ -18,7 +18,7 @@ if not all([DB_URL, GCP_SA_KEY, SHEET_ID]):
     print("ERROR: Faltan una o más variables de entorno (DATABASE_URL, GCP_SA_KEY, SHEET_ID).")
     exit(1)
 
-print("Iniciando migración de datos desde Google Sheets a Railway...")
+print("Iniciando migración de datos desde Google Sheets a Aiven...")
 
 try:
     # --- 2. CONECTARSE A GOOGLE SHEETS ---
@@ -57,19 +57,18 @@ try:
     df[COLUMNA_FECHA] = pd.to_datetime(df[COLUMNA_FECHA], dayfirst=True, errors='coerce')
     df.dropna(subset=[COLUMNA_FECHA], inplace=True)
     
-    # --- LÍNEA DE FILTRO DE MES ELIMINADA ---
-    # df = df[df[COLUMNA_FECHA].dt.month >= 8] # <-- ESTA LÍNEA HA SIDO ELIMINADA
+    # df = df[df[COLUMNA_FECHA].dt.month >= 8] # Filtro de mes deshabilitado
     
     print(f"Se han limpiado los datos. Se cargarán {len(df)} filas.")
 
-    # --- 4. CONECTARSE A RAILWAY (CON TIMEOUT) ---
+    # --- 4. CONECTARSE A LA BASE DE DATOS (CON TIMEOUT) ---
     engine = create_engine(
         DB_URL,
-        connect_args={'connect_timeout': 60}
+        connect_args={'connect_timeout': 60} # <--- ¡ESTA ES LA LÍNEA DE LA CORRECCIÓN!
     )
 
     # --- 5. INSERTAR DATOS ---
-    print(f"Conectando a Railway y cargando datos en la tabla '{NOMBRE_TABLA}'...")
+    print(f"Conectando a la base de datos y cargando datos en la tabla '{NOMBRE_TABLA}'...")
     df.to_sql(
         name=NOMBRE_TABLA,
         con=engine,
@@ -77,7 +76,7 @@ try:
         index=False,
         chunksize=1000
     )
-    print(f"¡Migración a Railway completada! Se han insertado {len(df)} filas.")
+    print(f"¡Migración a la base de datos completada! Se han insertado {len(df)} filas.")
 
 except Exception as e:
     print(f"--- OCURRIÓ UN ERROR DURANTE LA MIGRACIÓN ---")
