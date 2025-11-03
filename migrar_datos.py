@@ -56,7 +56,8 @@ try:
 
     df[COLUMNA_FECHA] = pd.to_datetime(df[COLUMNA_FECHA], dayfirst=True, errors='coerce')
     df.dropna(subset=[COLUMNA_FECHA], inplace=True)
-    df = df[df[COLUMNA_FECHA].dt.month >= 8] 
+    
+    # df = df[df[COLUMNA_FECHA].dt.month >= 8] # Filtro de mes deshabilitado
     
     print(f"Se han limpiado los datos. Se cargarán {len(df)} filas.")
 
@@ -64,8 +65,8 @@ try:
     engine = create_engine(
         DB_URL,
         connect_args={
-            'connect_timeout': 60, # Timeout de 60 segundos
-            'ssl_mode': 'REQUIRED' # Requerir SSL
+            'connect_timeout': 60,
+            'ssl_mode': 'REQUIRED'
         }
     )
 
@@ -75,8 +76,8 @@ try:
         name=NOMBRE_TABLA,
         con=engine,
         if_exists='replace',
-        index=False,
-        chunksize=1000
+        index=True,         # <-- CAMBIO 1: De False a True
+        index_label='id'    # <-- CAMBIO 2: Añadir esta línea
     )
     print(f"¡Migración a la base de datos completada! Se han insertado {len(df)} filas.")
 

@@ -1,11 +1,17 @@
 name: Actualizar Base de Datos en Railway
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'FullStack_Consolidado.xlsx'
+      - '.github/workflows/actualizar-db.yml'
+      - 'migrar_datos.py' # <-- AÑADE ESTA LÍNEA
+
   schedule:
-    # Ejecuta el flujo de trabajo cada 15 minutos
     - cron: '*/15 * * * *'
   workflow_dispatch:
-    # Añade un botón para ejecutarlo manualmente si lo deseas
 
 jobs:
   update-database:
