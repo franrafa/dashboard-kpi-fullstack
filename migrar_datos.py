@@ -63,8 +63,8 @@ try:
     engine = create_engine(
         DB_URL,
         connect_args={
-            'connect_timeout': 60,
-            'ssl_mode': 'REQUIRED'
+            'connect_timeout': 60, # Timeout de 60 segundos
+            'ssl_mode': 'REQUIRED' # Requerir SSL
         }
     )
 
@@ -74,8 +74,8 @@ try:
         name=NOMBRE_TABLA,
         con=engine,
         if_exists='replace',
-        index=True,         # <-- CAMBIO 1: De False a True
-        index_label='id'    # <-- CAMBIO 2: Añadir esta línea
+        index=True,
+        index_label='id'
     )
     print(f"¡Migración a la base de datos completada! Se han insertado {len(df)} filas.")
 

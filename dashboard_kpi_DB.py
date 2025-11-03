@@ -65,10 +65,12 @@ def cargar_datos_desde_db():
         print("ERROR: No se encontró la variable de entorno DATABASE_URL.")
         raise ValueError("No se encontró la variable de entorno DATABASE_URL")
 
+    # --- CÓDIGO CORREGIDO ---
+    # Se elimina 'ssl_mode' de connect_args porque ya está en la DATABASE_URL
     engine = create_engine(
         cadena_conexion,
         pool_recycle=3600,
-        connect_args={'connect_timeout': 60} # <--- Solo dejamos el timeout
+        connect_args={'connect_timeout': 60} 
     )
 
     with engine.connect() as connection:
