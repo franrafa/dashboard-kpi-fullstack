@@ -59,22 +59,16 @@ EJECUTIVOS_KPI_RANKING = [
 def cargar_datos_desde_db():
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Conectando a la base de datos en la nube...")
     
-    # --- CÓDIGO CORREGIDO ---
-    # Lee la URL de la base de datos única desde las variables de entorno
     cadena_conexion = os.environ.get("DATABASE_URL")
     
     if not cadena_conexion:
         print("ERROR: No se encontró la variable de entorno DATABASE_URL.")
         raise ValueError("No se encontró la variable de entorno DATABASE_URL")
-    # --- FIN DEL CÓDIGO CORREGIDO ---
 
     engine = create_engine(
         cadena_conexion,
         pool_recycle=3600,
-        connect_args={
-            'connect_timeout': 60, # Timeout de 60 segundos
-            'ssl_mode': 'REQUIRED' # Requerir SSL
-            } 
+        connect_args={'connect_timeout': 60} # <--- Solo dejamos el timeout
     )
 
     with engine.connect() as connection:
@@ -592,7 +586,7 @@ def download_ranking_excel(n_clicks, json_resolutividad, json_cantidad, json_con
     if not df_consolidado.empty:
         df_consolidado[COLUMNA_FECHA] = pd.to_datetime(df_consolidado[COLUMNA_FECHA]).dt.date
         cols_to_drop = ['Year', 'Semana_Num', 'WeekStartDate', 'WeekEndDate', 'WeekLabel']
-        df_consolidado = df_consolidado.drop(columns=[col for col in df_consolidado.columns])
+        df_consolidado = df_consolidado.drop(columns=[col for col in cols_to_drop if col in df_consolidado.columns])
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:

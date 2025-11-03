@@ -57,8 +57,6 @@ try:
     df[COLUMNA_FECHA] = pd.to_datetime(df[COLUMNA_FECHA], dayfirst=True, errors='coerce')
     df.dropna(subset=[COLUMNA_FECHA], inplace=True)
     
-    # df = df[df[COLUMNA_FECHA].dt.month >= 8] # Filtro de mes deshabilitado
-    
     print(f"Se han limpiado los datos. Se cargarán {len(df)} filas.")
 
     # --- 4. CONECTARSE A LA BASE DE DATOS (CON TIMEOUT y SSL) ---

@@ -7,7 +7,7 @@ on:
     paths:
       - 'FullStack_Consolidado.xlsx'
       - '.github/workflows/actualizar-db.yml'
-      - 'migrar_datos.py' # <-- AÑADE ESTA LÍNEA
+      - 'migrar_datos.py' 
 
   schedule:
     - cron: '*/15 * * * *'
