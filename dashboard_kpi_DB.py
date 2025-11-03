@@ -81,6 +81,8 @@ def cargar_datos_desde_db():
     df_dashboard[COLUMNA_FECHA] = pd.to_datetime(df_dashboard[COLUMNA_FECHA], dayfirst=True, errors='coerce')
     df_dashboard.dropna(subset=[COLUMNA_FECHA, COLUMNA_ANALISTA, COLUMNA_TORRE, COLUMNA_STATUS], inplace=True)
     
+    # df_dashboard = df_dashboard[df_dashboard[COLUMNA_FECHA].dt.month >= 8] # Filtro de mes deshabilitado
+    
     df_dashboard.sort_values(by=COLUMNA_FECHA, inplace=True)
     df_dashboard['Mes'] = df_dashboard[COLUMNA_FECHA].dt.strftime('%B').str.capitalize()
     df_dashboard['Year'] = df_dashboard[COLUMNA_FECHA].dt.isocalendar().year
@@ -425,7 +427,7 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
                     html.I(className=f"{icon} me-2 text-{color}"),
                     html.Span(f"{ejecutivo}", className="fw-bold me-auto"),
                     dbc.Badge(f"{score:.2%}", color=color, pill=True, className="ms-3 fs-6")
-                ], className="d-flex justify-content-start align-items-center py-2 border-0 border-bottom"))
+                ], className="d-flex justify-content-start align-items: center py-2 border-0 border-bottom"))
         kpi_ranking_card = dbc.Card(dbc.CardBody([
             html.H4("Ranking de Resolutividad", className="card-title text-center"),
             dbc.ListGroup(ranking_items, flush=True, className="border-0")
