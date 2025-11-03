@@ -57,15 +57,15 @@ try:
     df[COLUMNA_FECHA] = pd.to_datetime(df[COLUMNA_FECHA], dayfirst=True, errors='coerce')
     df.dropna(subset=[COLUMNA_FECHA], inplace=True)
     
+    # df = df[df[COLUMNA_FECHA].dt.month >= 8] # Filtro de mes deshabilitado
+    
     print(f"Se han limpiado los datos. Se cargarán {len(df)} filas.")
 
-    # --- 4. CONECTARSE A LA BASE DE DATOS (CON TIMEOUT y SSL) ---
+    # --- 4. CONECTARSE A LA BASE DE DATOS (CON TIMEOUT) ---
+    # Se elimina 'ssl_mode' de connect_args porque ya debe estar en la DATABASE_URL
     engine = create_engine(
         DB_URL,
-        connect_args={
-            'connect_timeout': 60, # Timeout de 60 segundos
-            'ssl_mode': 'REQUIRED' # Requerir SSL
-        }
+        connect_args={'connect_timeout': 60} 
     )
 
     # --- 5. INSERTAR DATOS ---
