@@ -74,7 +74,10 @@ def cargar_datos_desde_db():
     engine = create_engine(
         cadena_conexion,
         pool_recycle=3600,
-        connect_args={'connect_timeout': 60}
+        connect_args={
+            'connect_timeout': 60, # Timeout de 60 segundos
+            'ssl_mode': 'REQUIRED' # Requerir SSL
+            } 
     )
 
     with engine.connect() as connection:
