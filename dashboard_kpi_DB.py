@@ -34,42 +34,39 @@ VALID_USERNAME_PASSWORD_PAIRS = {'haintech': 'dashboard2025'}
 # --- EJECUTIVOS PARA EL RANKING KPI ---
 EJECUTIVOS_KPI_RANKING = [
     "Miguel Mantilla",
-"Miguel Aravena",
-"Francisco Narvaez",
-"Gia Marin",
-"Nilsson Diaz",
-"Carlos Quezada",
-"Marcos Coyan",
-"Excel Parra",
-"Felipe Tenorio",
-"Virginia Hernandez",
-"Christofer Villagran",
-"Miguel Paredes",
-"Merlyn Pulido",
-"Viviana Alvarado",
-"Maribel Martínez",
-"Igor Parra",
-"Yasna Coyan",
-"Manuel Pabón",
-"Michell Fernández"
+    "Miguel Aravena",
+    "Nilsson Diaz",
+    "Francisco Narvaez",
+    "Carlos Quezada",
+    "Gia Marin",
+    "Marcos Coyan",
+    "Excel Parra",
+    "Felipe Tenorio",
+    "Virginia Hernandez",
+    "Christofer Villagran",
+    "Miguel Paredes",
+    "Merlyn Pulido",
+    "Viviana Alvarado",
+    "Maribel Martínez",
+    "Igor Parra",
+    "Yasna Coyan",
+    "Manuel Pabón",
+    "Michell Fernández"
 ]
 
 
 # --- 2. FUNCIÓN DE CARGA DE DATOS ---
 def cargar_datos_desde_db():
-    USUARIO = os.environ.get("USUARIO")
-    CONTRASENA = os.environ.get("CONTRASENA")
-    HOST = os.environ.get("HOST")
-    PUERTO = os.environ.get("PUERTO")
-    BASE_DE_DATOS = os.environ.get("BASE_DE_DATOS")
-
     print(f"[{datetime.now().strftime('%H:%M:%S')}] Conectando a la base de datos en la nube...")
     
+    # --- CÓDIGO CORREGIDO ---
+    # Lee la URL de la base de datos única desde las variables de entorno
     cadena_conexion = os.environ.get("DATABASE_URL")
     
     if not cadena_conexion:
         print("ERROR: No se encontró la variable de entorno DATABASE_URL.")
         raise ValueError("No se encontró la variable de entorno DATABASE_URL")
+    # --- FIN DEL CÓDIGO CORREGIDO ---
 
     engine = create_engine(
         cadena_conexion,
@@ -87,9 +84,6 @@ def cargar_datos_desde_db():
 
     df_dashboard[COLUMNA_FECHA] = pd.to_datetime(df_dashboard[COLUMNA_FECHA], dayfirst=True, errors='coerce')
     df_dashboard.dropna(subset=[COLUMNA_FECHA, COLUMNA_ANALISTA, COLUMNA_TORRE, COLUMNA_STATUS], inplace=True)
-    
-    # --- LÍNEA DE FILTRO DE MES ELIMINADA ---
-    # df_dashboard = df_dashboard[df_dashboard[COLUMNA_FECHA].dt.month >= 8] 
     
     df_dashboard.sort_values(by=COLUMNA_FECHA, inplace=True)
     df_dashboard['Mes'] = df_dashboard[COLUMNA_FECHA].dt.strftime('%B').str.capitalize()
@@ -349,31 +343,24 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
     gestion_totales = dff[COLUMNA_ORDEN].count()
     total_ejecutivos = dff[COLUMNA_ANALISTA].nunique()
     
-    # --- CÁLCULOS DE KPI CON NUEVAS FÓRMULAS ---
     total_capacidad = dff[dff[COLUMNA_STATUS] == 'Capacidad'][COLUMNA_ORDEN].count()
     total_corregido_otro_equipo = dff[dff[COLUMNA_STATUS] == 'Corregido por otro Equipo'][COLUMNA_ORDEN].count()
     
-    # 1. Gestiones Atendidas
     gestiones_atendidas_numerador = gestion_totales - total_capacidad - total_corregido_otro_equipo
     gestiones_atendidas_raw = (gestiones_atendidas_numerador / gestion_totales) if gestion_totales > 0 else 0
     gestiones_atendidas = f"{gestiones_atendidas_raw:.2%}"
 
-    # 2. Tasa de Resolutividad
     total_corregido = dff[dff[COLUMNA_STATUS] == 'Corregido'][COLUMNA_ORDEN].count()
     total_flujo = dff[dff[COLUMNA_STATUS] == 'Flujo'][COLUMNA_ORDEN].count()
     tasa_resolutividad_numerador = total_corregido + total_flujo
     tasa_resolutividad_raw = (tasa_resolutividad_numerador / gestion_totales) if gestion_totales > 0 else 0
     tasa_resolutividad = f"{tasa_resolutividad_raw:.2%}"
 
-    # 3. Gestión FTE Día
     gestion_fte_dia = 0
     dias_trabajados_regla = 6 
     if dias_trabajados_regla > 0 and total_ejecutivos > 0:
-        # Usamos el numerador de Gestiones Atendidas para este cálculo
         gestion_fte_dia = round((gestiones_atendidas_numerador / dias_trabajados_regla) / total_ejecutivos)
     
-    # --- FIN DE CÁLCULOS DE KPI ---
-
     def crear_tarjeta_kpi(titulo, valor, color_valor="primary", icon="bi bi-info-circle"):
         return dbc.Col(dbc.Card(dbc.CardBody([
             html.Div([
@@ -605,7 +592,7 @@ def download_ranking_excel(n_clicks, json_resolutividad, json_cantidad, json_con
     if not df_consolidado.empty:
         df_consolidado[COLUMNA_FECHA] = pd.to_datetime(df_consolidado[COLUMNA_FECHA]).dt.date
         cols_to_drop = ['Year', 'Semana_Num', 'WeekStartDate', 'WeekEndDate', 'WeekLabel']
-        df_consolidado = df_consolidado.drop(columns=[col for col in cols_to_drop if col in df_consolidado.columns])
+        df_consolidado = df_consolidado.drop(columns=[col for col in df_consolidado.columns])
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
