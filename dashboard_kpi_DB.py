@@ -12,10 +12,13 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 import traceback
+import sys
 
 # --- 1. CONFIGURACIÓN GENERAL ---
 NOMBRE_TABLA = "consolidado_fullstack"
 HOJA_DATOS = "Consolidado FullStack"
+RUTA_ARCHIVO_EXCEL = "FullStack_Consolidado.xlsx" # Ruta para la migración
+
 try:
     locale.setlocale(locale.LC_TIME, 'es_ES.UTF-8')
 except locale.Error:
@@ -31,6 +34,15 @@ COLUMNA_STATUS = "STATUS_REAL"
 COLUMNA_TORRE = "TORRE"
 VALID_USERNAME_PASSWORD_PAIRS = {'haintech': 'dashboard2025'}
 
+# --- CONFIGURACIÓN DE BASE DE DATOS LOCAL ---
+USUARIO = "root"
+CONTRASENA = "fran1080" # <-- RECUERDA CAMBIAR SI ES OTRA
+HOST = "127.0.0.1"
+PUERTO = "3306"
+BASE_DE_DATOS = "Dashboard_KPI" 
+CADENA_CONEXION = f"mysql+pymysql://{USUARIO}:{CONTRASENA}@{HOST}:{PUERTO}/{BASE_DE_DATOS}"
+
+
 # --- EJECUTIVOS PARA EL RANKING KPI ---
 EJECUTIVOS_KPI_RANKING = [
     "Miguel Mantilla",
@@ -40,6 +52,7 @@ EJECUTIVOS_KPI_RANKING = [
     "Carlos Quezada",
     "Gia Marin",
     "Marcos Coyan",
+    "Angelo Cordeviola",
     "Excel Parra",
     "Felipe Tenorio",
     "Virginia Hernandez",
@@ -55,56 +68,119 @@ EJECUTIVOS_KPI_RANKING = [
 ]
 
 
-# --- 2. FUNCIÓN DE CARGA DE DATOS ---
+# --- 2. FUNCIÓN DE MIGRACIÓN DE EXCEL A DB ---
+def ejecutar_migracion_excel_a_db():
+    """Ejecuta la migración completa del Excel a la base de datos local."""
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Iniciando MIGRACIÓN de Excel a MySQL...")
+    
+    try:
+        # 2. LEER DATOS DEL EXCEL LOCAL
+        print(f"Leyendo el archivo Excel: {RUTA_ARCHIVO_EXCEL}")
+        df = pd.read_excel(RUTA_ARCHIVO_EXCEL, sheet_name=HOJA_DATOS)
+        print(f"Se han leído {len(df)} filas del Excel.")
+
+        # 3. LIMPIAR Y FILTRAR LOS DATOS
+        print("Limpiando y filtrando los datos...")
+        
+        df.columns = [
+            str(col).replace(' ', '_').replace('á', 'a').replace('é', 'e').replace('í', 'i')
+                .replace('ó', 'o').replace('ú', 'u').replace('ñ', 'n').upper()
+            for col in df.columns
+        ]
+
+        # Convertir a datetime y manejar errores
+        df[COLUMNA_FECHA] = pd.to_datetime(df[COLUMNA_FECHA], dayfirst=True, errors='coerce')
+        df.dropna(subset=[COLUMNA_FECHA], inplace=True)
+        
+        print(f"Se han limpiado los datos. Se cargarán {len(df)} filas.")
+
+        # 4. CONECTARSE A LA BASE DE DATOS LOCAL
+        engine = create_engine(CADENA_CONEXION)
+
+        # 5. INSERTAR DATOS
+        print(f"Cargando datos en la tabla '{NOMBRE_TABLA}'...")
+        # Usamos 'replace' para asegurar que la tabla siempre tenga la data fresca del Excel
+        df.to_sql(
+            name=NOMBRE_TABLA,
+            con=engine,
+            if_exists='replace',
+            index=True,
+            index_label='id'
+        )
+        print(f"¡MIGRACIÓN completada! Se han insertado {len(df)} filas.")
+        return True # Retorna éxito
+    
+    except FileNotFoundError:
+        print(f"--- ERROR FATAL (MIGRACIÓN) ---")
+        print(f"No se encontró el archivo '{RUTA_ARCHIVO_EXCEL}'. Asegúrate de que el Excel esté en la carpeta.")
+        return False
+    except SQLAlchemyError as e:
+        print(f"--- ERROR DE CONEXIÓN DB (MIGRACIÓN) ---")
+        print(f"Error: {e}")
+        if "Access denied" in str(e):
+            print("AVISO: Error de 'Acceso denegado'. Verifica tu USUARIO y CONTRASENA.")
+        if "Unknown database" in str(e):
+            print(f"AVISO: No se encontró la base de datos '{BASE_DE_DATOS}'.")
+        return False
+    except Exception as e:
+        print(f"--- OCURRIÓ UN ERROR DURANTE LA MIGRACIÓN ---")
+        print(f"Error: {e}")
+        traceback.print_exc()
+        return False
+
+
+# --- 3. FUNCIÓN DE CARGA DE DATOS DESDE DB ---
 def cargar_datos_desde_db():
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] Conectando a la base de datos en la nube...")
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Conectando a la base de datos LOCAL para LEER...")
     
-    cadena_conexion = os.environ.get("DATABASE_URL")
-    
-    if not cadena_conexion:
-        print("ERROR: No se encontró la variable de entorno DATABASE_URL.")
-        raise ValueError("No se encontró la variable de entorno DATABASE_URL")
+    try:
+        engine = create_engine(CADENA_CONEXION)
+        with engine.connect() as connection:
+            df_dashboard = pd.read_sql_table(NOMBRE_TABLA, connection)
+        
+        print(f"Se han leído {len(df_dashboard)} filas de la base de datos.")
 
-    # --- CÓDIGO CORREGIDO ---
-    # Se elimina 'ssl_mode' de connect_args porque ya está en la DATABASE_URL
-    engine = create_engine(
-        cadena_conexion,
-        pool_recycle=3600,
-        connect_args={'connect_timeout': 60} 
-    )
+        # --- APLICADA MODIFICACIÓN PARA EVITAR PerformanceWarning ---
+        df_dashboard = df_dashboard.copy() 
+        # -----------------------------------------------------------
 
-    with engine.connect() as connection:
-        df_dashboard = pd.read_sql_table(NOMBRE_TABLA, connection)
-    
-    print(f"Se han leído {len(df_dashboard)} filas de la base de datos.")
+        # PROCESAMIENTO DE FECHAS (EXISTENTE)
+        df_dashboard[COLUMNA_FECHA] = pd.to_datetime(df_dashboard[COLUMNA_FECHA], errors='coerce')
+        df_dashboard.dropna(subset=[COLUMNA_FECHA, COLUMNA_ANALISTA, COLUMNA_TORRE, COLUMNA_STATUS], inplace=True)
+        
+        df_dashboard.sort_values(by=COLUMNA_FECHA, inplace=True)
+        df_dashboard['Mes'] = df_dashboard[COLUMNA_FECHA].dt.strftime('%B').str.capitalize()
+        df_dashboard['Year'] = df_dashboard[COLUMNA_FECHA].dt.isocalendar().year
+        df_dashboard['Semana_Num'] = df_dashboard[COLUMNA_FECHA].dt.isocalendar().week
+        df_dashboard['WeekStartDate'] = pd.to_datetime(df_dashboard['Year'].astype(str) + df_dashboard['Semana_Num'].astype(str) + '1', format='%G%V%u')
+        df_dashboard['WeekEndDate'] = df_dashboard['WeekStartDate'] + pd.to_timedelta('6 days')
+        df_dashboard['WeekLabel'] = "Semana " + df_dashboard['Semana_Num'].astype(str) + " (" + df_dashboard['WeekStartDate'].dt.strftime('%d %b') + " - " + df_dashboard['WeekEndDate'].dt.strftime('%d %b') + ")"
+        df_dashboard['Mes_Num'] = df_dashboard[COLUMNA_FECHA].dt.month
+        
+        return df_dashboard
 
-    df_dashboard[COLUMNA_FECHA] = pd.to_datetime(df_dashboard[COLUMNA_FECHA], dayfirst=True, errors='coerce')
-    df_dashboard.dropna(subset=[COLUMNA_FECHA, COLUMNA_ANALISTA, COLUMNA_TORRE, COLUMNA_STATUS], inplace=True)
-    
-    # df_dashboard = df_dashboard[df_dashboard[COLUMNA_FECHA].dt.month >= 8] # Filtro de mes deshabilitado
-    
-    df_dashboard.sort_values(by=COLUMNA_FECHA, inplace=True)
-    df_dashboard['Mes'] = df_dashboard[COLUMNA_FECHA].dt.strftime('%B').str.capitalize()
-    df_dashboard['Year'] = df_dashboard[COLUMNA_FECHA].dt.isocalendar().year
-    df_dashboard['Semana_Num'] = df_dashboard[COLUMNA_FECHA].dt.isocalendar().week
-    df_dashboard['WeekStartDate'] = pd.to_datetime(df_dashboard['Year'].astype(str) + df_dashboard['Semana_Num'].astype(str) + '1', format='%G%V%u')
-    df_dashboard['WeekEndDate'] = df_dashboard['WeekStartDate'] + pd.to_timedelta('6 days')
-    df_dashboard['WeekLabel'] = "Semana " + df_dashboard['Semana_Num'].astype(str) + " (" + df_dashboard['WeekStartDate'].dt.strftime('%d %b') + " - " + df_dashboard['WeekEndDate'].dt.strftime('%d %b') + ")"
-    
-    return df_dashboard
+    except Exception as e:
+        print(f"--- ERROR AL LEER DESDE DB ---")
+        print(f"Error: {e}")
+        return pd.DataFrame()
 
 
-# --- 3. INICIALIZACIÓN DE LA APLICACIÓN DASH ---
+# --- 4. INICIALIZACIÓN DE LA APLICACIÓN DASH ---
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.LUX, dbc.icons.BOOTSTRAP], suppress_callback_exceptions=True)
 server = app.server
-server.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
+server.secret_key = "mi_clave_secreta_local_12345"
 auth = dash_auth.BasicAuth(app, VALID_USERNAME_PASSWORD_PAIRS)
 
 # --- Carga inicial de datos ---
 try:
+    # Intenta hacer una migración inicial antes de la primera carga
+    ejecutar_migracion_excel_a_db() 
+    
     df_principal = cargar_datos_desde_db()
     
-    df_principal['Mes_Num'] = df_principal[COLUMNA_FECHA].dt.month
+    if df_principal.empty:
+         raise Exception("El DataFrame inicial está vacío. Revisar migración/conexión.")
+
     meses_ordenados = df_principal[['Mes', 'Mes_Num']].drop_duplicates().sort_values('Mes_Num')
     meses_disponibles = meses_ordenados['Mes'].tolist()
     
@@ -122,11 +198,14 @@ except Exception as e:
     traceback.print_exc()
 
 
-# --- 4. DISEÑO DE LA APLICACIÓN WEB (LAYOUT) ---
+# --- 5. DISEÑO DE LA APLICACIÓN WEB (LAYOUT) ---
 if datos_cargados_correctamente:
     app.layout = dbc.Container([
         dcc.Store(id='store-main-data', data=df_principal.to_json(date_format='iso', orient='split')),
-        dcc.Interval(id='interval-component', interval=60 * 1000, n_intervals=0),
+        
+        # INTERVALO CAMBIADO A 120 * 1000 milisegundos = 2 minutos
+        dcc.Interval(id='interval-component', interval=120 * 1000, n_intervals=0), 
+        
         dcc.Download(id="download-excel"),
         dcc.Store(id='store-resumen-conteo-data'),
         dcc.Store(id='store-resumen-porcentaje-data'),
@@ -138,17 +217,17 @@ if datos_cargados_correctamente:
         dbc.Row(dbc.Col(html.H1("Dashboard Consolidado FullStack", className="text-center text-primary my-4"))),
         dbc.Card(dbc.CardBody([
              dbc.Row([
-                dbc.Col(dcc.Dropdown(id='filtro-mes', options=meses_disponibles, placeholder="Seleccionar Mes(es)", multi=True, className="dbc"), md=3),
-                dbc.Col([
-                    html.Label("Filtrar por:", style={'fontWeight': 'bold'}, className="mb-1"),
-                    dcc.RadioItems(id='modo-filtro-tiempo', options=[{'label': ' Quincena', 'value': 'quincena'}, {'label': ' Semana', 'value': 'semana'}], value='quincena', inline=True, labelStyle={'margin-right': '10px'}),
-                    html.Div(id='contenedor-filtro-quincena', children=[dcc.Dropdown(id='filtro-quincena', options=[{'label': '1ra Quincena', 'value': 1}, {'label': '2da Quincena', 'value': 2}], placeholder="Seleccionar Quincena", className="mt-1 dbc")]),
-                    html.Div(id='contenedor-filtro-semana', children=[dcc.Dropdown(id='filtro-semana', options=semanas_disponibles_options, placeholder="Seleccionar Semana(s)", multi=True, className="mt-1 dbc")], style={'display': 'none'})
-                ], md=3),
-                dbc.Col(dcc.Dropdown(id='filtro-torre', options=torres_disponibles, placeholder="Seleccionar Torre(s)", multi=True, className="dbc"), md=3),
-                dbc.Col(dcc.Dropdown(id='filtro-ejecutivo', options=ejecutivos_disponibles, placeholder="Seleccionar Ejecutivo(s)", multi=True, className="dbc"), md=3),
-            ]),
-            dbc.Row(dbc.Col(dbc.Button("Limpiar Filtros", id="btn-limpiar", color="secondary", outline=True, className="w-100 mt-3"), width=12))
+                 dbc.Col(dcc.Dropdown(id='filtro-mes', options=meses_disponibles, placeholder="Seleccionar Mes(es)", multi=True, className="dbc"), md=3),
+                 dbc.Col([
+                     html.Label("Filtrar por:", style={'fontWeight': 'bold'}, className="mb-1"),
+                     dcc.RadioItems(id='modo-filtro-tiempo', options=[{'label': ' Quincena', 'value': 'quincena'}, {'label': ' Semana', 'value': 'semana'}], value='quincena', inline=True, labelStyle={'margin-right': '10px'}),
+                     html.Div(id='contenedor-filtro-quincena', children=[dcc.Dropdown(id='filtro-quincena', options=[{'label': '1ra Quincena', 'value': 1}, {'label': '2da Quincena', 'value': 2}], placeholder="Seleccionar Quincena", className="mt-1 dbc")]),
+                     html.Div(id='contenedor-filtro-semana', children=[dcc.Dropdown(id='filtro-semana', options=semanas_disponibles_options, placeholder="Seleccionar Semana(s)", multi=True, className="mt-1 dbc")], style={'display': 'none'})
+                 ], md=3),
+                 dbc.Col(dcc.Dropdown(id='filtro-torre', options=torres_disponibles, placeholder="Seleccionar Torre(s)", multi=True, className="dbc"), md=3),
+                 dbc.Col(dcc.Dropdown(id='filtro-ejecutivo', options=ejecutivos_disponibles, placeholder="Seleccionar Ejecutivo(s)", multi=True, className="dbc"), md=3),
+             ]),
+             dbc.Row(dbc.Col(dbc.Button("Limpiar Filtros", id="btn-limpiar", color="secondary", outline=True, className="w-100 mt-3"), width=12))
         ]), className="mb-4 shadow-sm"),
 
         dbc.Tabs([
@@ -176,7 +255,7 @@ else:
         dbc.Alert(error_mensaje, color="danger", className="mt-4")
     ])
 
-# --- 5. LÓGICA DE INTERACTIVIDAD (CALLBACKS) ---
+# --- 6. LÓGICA DE INTERACTIVIDAD (CALLBACKS) ---
 
 @callback(
     Output('store-main-data', 'data'),
@@ -186,9 +265,20 @@ else:
 )
 def auto_update_data(n):
     try:
+        print(f"[{datetime.now().strftime('%H:%M:%S')}] Auto-actualización: Ejecutando migración y recargando datos...")
+        
+        # 1. EJECUTAR MIGRACIÓN (Se ejecuta tu código de Excel a DB)
+        ejecutar_migracion_excel_a_db()
+        
+        # 2. CARGAR DATOS FRESCOS DESDE DB
         new_df = cargar_datos_desde_db()
+        
+        if new_df.empty:
+            print("Error: DataFrame vacío después de la recarga.")
+            raise PreventUpdate # Evita actualizar el dashboard con data vacía
+
         new_data_json = new_df.to_json(date_format='iso', orient='split')
-        update_time_str = f"Datos actualizados desde DB: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+        update_time_str = f"Datos actualizados (auto): {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
         return new_data_json, update_time_str
     except Exception as e:
         print(f"Error durante la actualización automática de datos: {e}")
@@ -283,6 +373,7 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
     df_principal[COLUMNA_FECHA] = pd.to_datetime(df_principal[COLUMNA_FECHA])
     dff = df_principal.copy()
     
+    # --- Aplicar Filtros ---
     if meses: dff = dff[dff['Mes'].isin(meses)]
     if modo_tiempo == 'quincena' and quincena:
         dff = dff[dff[COLUMNA_FECHA].dt.day <= 15 if quincena == 1 else dff[COLUMNA_FECHA].dt.day > 15]
@@ -290,6 +381,16 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         dff = dff[dff['Semana_Num'].isin(semanas)]
     if torres: dff = dff[dff[COLUMNA_TORRE].isin(torres)]
     if ejecutivos: dff = dff[dff[COLUMNA_ANALISTA].isin(ejecutivos)]
+
+    # --- INICIO: NORMALIZAR STATUS_REAL PARA EVITAR DUPLICIDAD EN TABLA POR STATUS ---
+    if not dff.empty:
+        # 1. Limpiar espacios iniciales/finales
+        dff[COLUMNA_STATUS] = dff[COLUMNA_STATUS].str.strip() 
+        
+        # 2. Reemplazar variaciones conocidas por 'Corregido'
+        dff.loc[dff[COLUMNA_STATUS].str.contains('Corregido', case=False, na=False), COLUMNA_STATUS] = 'Corregido'
+    # --- FIN: NORMALIZAR STATUS_REAL ---
+
 
     if dff.empty:
         empty_df_dict = [{'Nota': 'No hay datos para los filtros seleccionados'}]
@@ -303,7 +404,9 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
                 empty_fig, empty_fig, empty_fig, empty_fig, 
                 no_data_msg, no_data_msg, empty_data, empty_data, empty_data) 
 
-    all_months_ordered_local = sorted(df_principal['Mes'].unique(), key=lambda m: pd.to_datetime(f'01-{m}-2025', format='%d-%B-%Y').month)
+    # --- Generación de Tablas y Gráficos con Datos Filtrados y Normalizados ---
+    
+    all_months_ordered_local = df_principal[['Mes', 'Mes_Num']].drop_duplicates().sort_values('Mes_Num')['Mes'].tolist()
     
     pivot_mensual = pd.pivot_table(dff, values=COLUMNA_ORDEN, index=[COLUMNA_TORRE, COLUMNA_ANALISTA], columns='Mes', aggfunc='count', fill_value=0)
     pivot_mensual['Total General'] = pivot_mensual.sum(axis=1)
@@ -318,10 +421,10 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
         torre_sum = df_torre_pivot.sum()
         torre_row = {'Etiquetas de Fila': torre, 'Tipo': 'Torre'}; torre_row.update(torre_sum); records.append(torre_row)
         if isinstance(df_torre_pivot, pd.Series):
-            ejec_row = {'Etiquetas de Fila': f'     {df_torre_pivot.name}', 'Tipo': 'Ejecutivo'}; ejec_row.update(df_torre_pivot); records.append(ejec_row)
+            ejec_row = {'Etiquetas de Fila': f'    {df_torre_pivot.name}', 'Tipo': 'Ejecutivo'}; ejec_row.update(df_torre_pivot); records.append(ejec_row)
         else:
             for ejecutivo_name, data in df_torre_pivot.iterrows():
-                ejec_row = {'Etiquetas de Fila': f'     {ejecutivo_name}', 'Tipo': 'Ejecutivo'}; ejec_row.update(data); records.append(ejec_row)
+                ejec_row = {'Etiquetas de Fila': f'    {ejecutivo_name}', 'Tipo': 'Ejecutivo'}; ejec_row.update(data); records.append(ejec_row)
     df_mensual_final = pd.DataFrame(records)
     cols_mensual = [{'name': c, 'id': c} for c in df_mensual_final.columns if c != 'Tipo']
     data_mensual = df_mensual_final.to_dict('records')
@@ -341,15 +444,16 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
     gestion_totales = dff[COLUMNA_ORDEN].count()
     total_ejecutivos = dff[COLUMNA_ANALISTA].nunique()
     
+    # Nota: Los cálculos de KPI también se benefician de la normalización del 'Corregido'
     total_capacidad = dff[dff[COLUMNA_STATUS] == 'Capacidad'][COLUMNA_ORDEN].count()
-    total_corregido_otro_equipo = dff[dff[COLUMNA_STATUS] == 'Corregido por otro Equipo'][COLUMNA_ORDEN].count()
+    total_corregido_otro_equipo = df_principal[df_principal[COLUMNA_STATUS] == 'Corregido por otro Equipo'][COLUMNA_ORDEN].count()
     
     gestiones_atendidas_numerador = gestion_totales - total_capacidad - total_corregido_otro_equipo
     gestiones_atendidas_raw = (gestiones_atendidas_numerador / gestion_totales) if gestion_totales > 0 else 0
     gestiones_atendidas = f"{gestiones_atendidas_raw:.2%}"
 
     total_corregido = dff[dff[COLUMNA_STATUS] == 'Corregido'][COLUMNA_ORDEN].count()
-    total_flujo = dff[dff[COLUMNA_STATUS] == 'Flujo'][COLUMNA_ORDEN].count()
+    total_flujo = dff[dff[COLUMNA_STATUS] == 'Flujo_Cobranza'][COLUMNA_ORDEN].count()
     tasa_resolutividad_numerador = total_corregido + total_flujo
     tasa_resolutividad_raw = (tasa_resolutividad_numerador / gestion_totales) if gestion_totales > 0 else 0
     tasa_resolutividad = f"{tasa_resolutividad_raw:.2%}"
@@ -427,7 +531,7 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
                     html.I(className=f"{icon} me-2 text-{color}"),
                     html.Span(f"{ejecutivo}", className="fw-bold me-auto"),
                     dbc.Badge(f"{score:.2%}", color=color, pill=True, className="ms-3 fs-6")
-                ], className="d-flex justify-content-start align-items: center py-2 border-0 border-bottom"))
+                ], className="d-flex justify-content-start align-items-center py-2 border-0 border-bottom"))
         kpi_ranking_card = dbc.Card(dbc.CardBody([
             html.H4("Ranking de Resolutividad", className="card-title text-center"),
             dbc.ListGroup(ranking_items, flush=True, className="border-0")
@@ -445,73 +549,66 @@ def actualizar_dashboard_completo(json_data, meses, quincena, semanas, torres, e
                     html.Div([
                         dbc.Badge(f"{porcentaje:.2%}", color="success", className="me-2", pill=True),
                         dbc.Badge(f"Corregidas: {corregidas}", color="primary", className="me-2", pill=True),
-                        dbc.Badge(f"Asignadas: {asignadas}", color="light", text_color="dark", pill=True)
-                    ], className="ms-3")
-                ], className="d-flex justify-content-start align-items-center py-2 border-0 border-bottom"))
-        
+                        dbc.Badge(f"Asignadas: {asignadas}", color="secondary", pill=True)
+                    ], className="d-flex")
+                ], className="d-flex justify-content-between align-items-center py-2 border-0 border-bottom"))
         kpi_quantity_card = dbc.Card(dbc.CardBody([
-            html.H4("Detalle de Gestiones", className="card-title text-center"),
+            html.H4("Volumen y Corregidas", className="card-title text-center"),
             dbc.ListGroup(quantity_items, flush=True, className="border-0")
         ]), className="shadow-sm border-0 rounded-lg")
         
+        kpi_ranking_container_output = [kpi_ranking_card]
+        kpi_quantity_ranking_container_output = [kpi_quantity_card]
+        kpi_resolutividad_data = df_kpi_resolutividad_download.to_json(orient='split')
+        kpi_cantidad_data = df_kpi_cantidad_download.to_json(orient='split')
     else:
-        alert_msg = dbc.Alert("No hay datos para generar el ranking KPI con los ejecutivos y filtros seleccionados.", color="info")
-        kpi_ranking_card = alert_msg
-        kpi_quantity_card = alert_msg
-        df_kpi_resolutividad_download = pd.DataFrame()
-        df_kpi_cantidad_download = pd.DataFrame() 
-    
-    return (
-        data_mensual, cols_mensual, 
-        data_torre, cols_torre, 
-        data_status, cols_status, 
-        data_ejecutivo_conteo, cols_ejecutivo_conteo, 
-        data_ejecutivo_porcentaje, cols_ejecutivo_porcentaje, 
-        tarjetas, tarjetas, tarjetas, 
-        fig_torta_torre, fig_bar_resolutividad, fig_volumen_ejec, fig_composicion_status,
-        kpi_ranking_card,
-        kpi_quantity_card,
-        df_kpi_resolutividad_download.to_json(orient='split', index=False),
-        df_kpi_cantidad_download.to_json(orient='split', index=False),
-        dff.to_json(date_format='iso', orient='split')
-    )
+        kpi_ranking_container_output = [dbc.Col(dbc.Alert("No hay ejecutivos clave en los datos filtrados.", color="info"), width=12)]
+        kpi_quantity_ranking_container_output = [dbc.Col(dbc.Alert("No hay datos para el ranking de cantidad.", color="info"), width=12)]
+        kpi_resolutividad_data = pd.DataFrame().to_json(orient='split')
+        kpi_cantidad_data = pd.DataFrame().to_json(orient='split')
+        
+    filtered_data_json = dff.to_json(date_format='iso', orient='split')
 
-@callback(
-    Output('filtro-mes', 'value'), Output('filtro-quincena', 'value'), Output('filtro-semana', 'value'),
-    Output('filtro-torre', 'value'), Output('filtro-ejecutivo', 'value'), Output('modo-filtro-tiempo', 'value'),
-    Input('btn-limpiar', 'n_clicks'),
-    prevent_initial_call=True
-)
-def limpiar_filtros(n_clicks):
-    if not n_clicks:
-        raise PreventUpdate
-    return [], None, [], [], [], 'quincena'
+    return (data_mensual, cols_mensual, data_torre, cols_torre, data_status, cols_status,
+            data_ejecutivo_conteo, cols_ejecutivo_conteo, data_ejecutivo_porcentaje, cols_ejecutivo_porcentaje, 
+            tarjetas, tarjetas, tarjetas,
+            fig_torta_torre, fig_bar_resolutividad, fig_volumen_ejec, fig_composicion_status,
+            kpi_ranking_container_output, kpi_quantity_ranking_container_output,
+            kpi_resolutividad_data, kpi_cantidad_data, filtered_data_json)
 
+# --- CALLBACKS DE DESCARGA (SIN CAMBIOS RELEVANTES) ---
 @callback(
-    Output('download-preview-container', 'children'),
-    Output('store-download-raw-data', 'data'),
-    Output('store-resumen-conteo-data', 'data'),
-    Output('store-resumen-porcentaje-data', 'data'),
-    Output('btn-download-all', 'disabled'),
-    Input('btn-generate-download', 'n_clicks'),
-    State('filtro-mes', 'value'),
-    State('filtro-quincena', 'value'),
-    State('filtro-semana', 'value'),
-    State('filtro-torre', 'value'),
-    State('filtro-ejecutivo', 'value'),
-    State('modo-filtro-tiempo', 'value'),
+    Output("download-preview-container", "children"),
+    Output("btn-download-all", "disabled"),
+    Output("store-download-raw-data", "data"),
+    Input("btn-generate-download", "n_clicks"),
     State('download-date-picker', 'start_date'),
     State('download-date-picker', 'end_date'),
     State('store-main-data', 'data'),
+    State('filtro-mes', 'value'), 
+    State('filtro-quincena', 'value'), 
+    State('filtro-semana', 'value'),
+    State('filtro-torre', 'value'), 
+    State('filtro-ejecutivo', 'value'),
+    State('modo-filtro-tiempo', 'value'),
     prevent_initial_call=True
 )
-def generate_download_file(n_clicks, meses, quincena, semanas, torres, ejecutivos, modo_tiempo, start_date, end_date, json_data):
-    if not n_clicks or not start_date or not end_date or not json_data:
+def generar_datos_para_descarga(n_clicks, start_date, end_date, json_data, meses, quincena, semanas, torres, ejecutivos, modo_tiempo):
+    if not json_data:
         raise PreventUpdate
-    
-    df = pd.read_json(io.StringIO(json_data), orient='split')
-    df[COLUMNA_FECHA] = pd.to_datetime(df[COLUMNA_FECHA])
-    dff = df.copy()
+
+    df_principal = pd.read_json(io.StringIO(json_data), orient='split')
+    df_principal[COLUMNA_FECHA] = pd.to_datetime(df_principal[COLUMNA_FECHA])
+    dff = df_principal.copy()
+
+    # Aplicar filtros de fecha del DatePicker
+    if start_date and end_date:
+        start = pd.to_datetime(start_date)
+        end = pd.to_datetime(end_date)
+        dff = dff[(dff[COLUMNA_FECHA] >= start) & (dff[COLUMNA_FECHA] <= end)]
+
+    # Aplicar filtros del dashboard (lógica duplicada de actualizar_dashboard_completo, sin incluir la normalización
+    # para que la descarga RAW sea más fiel a la fuente, pero sí debe reflejar los filtros de tiempo, torre y ejecutivo)
     if meses: dff = dff[dff['Mes'].isin(meses)]
     if modo_tiempo == 'quincena' and quincena:
         dff = dff[dff[COLUMNA_FECHA].dt.day <= 15 if quincena == 1 else dff[COLUMNA_FECHA].dt.day > 15]
@@ -519,93 +616,111 @@ def generate_download_file(n_clicks, meses, quincena, semanas, torres, ejecutivo
         dff = dff[dff['Semana_Num'].isin(semanas)]
     if torres: dff = dff[dff[COLUMNA_TORRE].isin(torres)]
     if ejecutivos: dff = dff[dff[COLUMNA_ANALISTA].isin(ejecutivos)]
-    start_date_dt = pd.to_datetime(start_date)
-    end_date_dt = pd.to_datetime(end_date)
-    dff_download = dff[(dff[COLUMNA_FECHA] >= start_date_dt) & (dff[COLUMNA_FECHA] <= end_date_dt)]
-    if dff_download.empty:
-        return dbc.Alert("No hay datos para los filtros y rango de fechas seleccionados.", color="info"), None, None, None, True
-    df_conteo, _, _ = crear_tabla_conteo_diario(dff_download, COLUMNA_ANALISTA)
-    df_porcentaje, _, _ = crear_tabla_porcentaje_corregido(dff_download, COLUMNA_ANALISTA)
-    preview_table = dash_table.DataTable(
-        data=dff_download.head(10).to_dict('records'),
-        columns=[{'name': i, 'id': i} for i in dff_download.columns if i not in ['Year', 'Semana_Num', 'WeekStartDate', 'WeekEndDate', 'WeekLabel']],
-        page_size=10,
-        style_table={'overflowX': 'auto', 'marginTop': '10px'},
-        style_header={'backgroundColor': '#f8f9fa', 'fontWeight': 'bold'},
-        style_cell={'textAlign': 'left', 'padding': '8px'}
-    )
-    preview_content = [html.H5(f"Vista previa de los datos detallados (primeras 10 de {len(dff_download)} filas):", className="text-secondary"), preview_table]
-    return (preview_content, dff_download.to_json(date_format='iso', orient='split'),
-            df_conteo.to_json(orient='split'), df_porcentaje.to_json(orient='split'), False)
+
+    if dff.empty:
+        return dbc.Alert("No hay datos para descargar con los filtros aplicados.", color="warning"), True, None
+
+    # Normalizar Status para las tablas de resumen en la descarga (si se incluyen)
+    df_normalized_for_summaries = dff.copy()
+    df_normalized_for_summaries[COLUMNA_STATUS] = df_normalized_for_summaries[COLUMNA_STATUS].str.strip() 
+    df_normalized_for_summaries.loc[df_normalized_for_summaries[COLUMNA_STATUS].str.contains('Corregido', case=False, na=False), COLUMNA_STATUS] = 'Corregido'
+
+    # Generar data para las hojas de resumen (conteo, status, ejecutivo)
+    date_range_for_tables = pd.date_range(start=dff[COLUMNA_FECHA].min().normalize(), end=dff[COLUMNA_FECHA].max().normalize())
+    df_resumen_torre, _, _ = crear_tabla_conteo_diario(df_normalized_for_summaries, COLUMNA_TORRE, date_range_for_tables)
+    df_resumen_status, _, _ = crear_tabla_conteo_diario(df_normalized_for_summaries, COLUMNA_STATUS, date_range_for_tables)
+    df_resumen_ejecutivo, _, _ = crear_tabla_conteo_diario(df_normalized_for_summaries, COLUMNA_ANALISTA, date_range_for_tables)
+    
+    # Prepara el diccionario de datos a guardar en el store
+    download_data = {
+        'raw_data': dff.to_json(orient='split'),
+        'resumen_torre': df_resumen_torre.to_json(orient='split'),
+        'resumen_status': df_resumen_status.to_json(orient='split'),
+        'resumen_ejecutivo': df_resumen_ejecutivo.to_json(orient='split'),
+    }
+
+    preview_message = dbc.Alert(f"Datos listos para descargar. {len(dff)} filas seleccionadas. Presiona el botón verde para descargar el archivo completo.", color="success")
+    return preview_message, False, download_data
 
 @callback(
-    Output("download-excel", "data"),
+    Output("download-excel", "data", allow_duplicate=True),
     Input("btn-download-all", "n_clicks"),
     State('store-download-raw-data', 'data'),
-    State('store-resumen-conteo-data', 'data'),
-    State('store-resumen-porcentaje-data', 'data'),
-    prevent_initial_call=True,
+    State('store-kpi-resolutividad-data', 'data'),
+    State('store-kpi-cantidad-data', 'data'),
+    prevent_initial_call=True
 )
-def download_all_in_one_excel(n_clicks, json_raw, json_conteo, json_porcentaje):
-    if not n_clicks or not json_raw or not json_conteo or not json_porcentaje:
+def descargar_datos_completos(n_clicks, download_data_json, kpi_resolutividad_json, kpi_cantidad_json):
+    if not download_data_json:
         raise PreventUpdate
-        
-    df_raw = pd.read_json(io.StringIO(json_raw), orient='split')
-    df_conteo = pd.read_json(io.StringIO(json_conteo), orient='split')
-    df_porcentaje = pd.read_json(io.StringIO(json_porcentaje), orient='split')
-    if COLUMNA_FECHA in df_raw.columns:
-        df_raw[COLUMNA_FECHA] = pd.to_datetime(df_raw[COLUMNA_FECHA]).dt.date
-    cols_to_drop = ['Year', 'Semana_Num', 'WeekStartDate', 'WeekEndDate', 'WeekLabel']
-    df_raw = df_raw.drop(columns=[col for col in cols_to_drop if col in df_raw.columns])
+
+    raw_df = pd.read_json(io.StringIO(download_data_json['raw_data']), orient='split')
+    df_resumen_torre = pd.read_json(io.StringIO(download_data_json['resumen_torre']), orient='split')
+    df_resumen_status = pd.read_json(io.StringIO(download_data_json['resumen_status']), orient='split')
+    df_resumen_ejecutivo = pd.read_json(io.StringIO(download_data_json['resumen_ejecutivo']), orient='split')
+    df_kpi_resolutividad = pd.read_json(io.StringIO(kpi_resolutividad_json), orient='split')
+    df_kpi_cantidad = pd.read_json(io.StringIO(kpi_cantidad_json), orient='split')
+
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df_raw.to_excel(writer, sheet_name='Datos Detallados', index=False)
-        df_conteo.to_excel(writer, sheet_name='Resumen Cantidad', index=False)
-        df_porcentaje.to_excel(writer, sheet_name='Resumen Resolutividad', index=False)
-    output.seek(0)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"reporte_completo_{timestamp}.xlsx"
-    return dcc.send_bytes(output.read(), filename=filename)
+    with pd.ExcelWriter(output, engine='xlsxwriter', datetime_format='dd-mm-yyyy') as writer:
+        raw_df.to_excel(writer, sheet_name='Data_Cruda', index=False)
+        df_resumen_torre.to_excel(writer, sheet_name='Resumen_Torre', index=False)
+        df_resumen_status.to_excel(writer, sheet_name='Resumen_Status', index=False)
+        df_resumen_ejecutivo.to_excel(writer, sheet_name='Resumen_Ejecutivo', index=False)
+        
+        # Agrega hoja de Ranking KPI
+        start_row = 0
+        df_kpi_resolutividad.to_excel(writer, sheet_name='Ranking_KPI', startrow=start_row, index=False)
+        start_row += len(df_kpi_resolutividad) + 2
+        
+        # Escribe la segunda tabla debajo
+        writer.sheets['Ranking_KPI'].write(start_row, 0, 'Volumen y Corregidas')
+        df_kpi_cantidad.to_excel(writer, sheet_name='Ranking_KPI', startrow=start_row + 1, index=False)
+
+    data = output.getvalue()
+    return dcc.send_bytes(data, f"Consolidado_FullStack_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
 
 @callback(
     Output("download-excel", "data", allow_duplicate=True),
     Input("btn-download-ranking", "n_clicks"),
     State('store-kpi-resolutividad-data', 'data'),
     State('store-kpi-cantidad-data', 'data'),
-    State('store-filtered-data', 'data'), 
-    prevent_initial_call=True,
+    prevent_initial_call=True
 )
-def download_ranking_excel(n_clicks, json_resolutividad, json_cantidad, json_consolidado):
-    if not n_clicks or not json_resolutividad or not json_cantidad or not json_consolidado:
+def descargar_ranking_kpi(n_clicks, kpi_resolutividad_json, kpi_cantidad_json):
+    if not kpi_resolutividad_json or not kpi_cantidad_json:
         raise PreventUpdate
-    
-    df_resolutividad = pd.read_json(io.StringIO(json_resolutividad), orient='split')
-    df_cantidad = pd.read_json(io.StringIO(json_cantidad), orient='split')
-    df_consolidado = pd.read_json(io.StringIO(json_consolidado), orient='split')
-    
-    if not df_resolutividad.empty:
-        df_resolutividad['Resolutividad'] = pd.to_numeric(df_resolutividad['Resolutividad'])
-        df_resolutividad['Resolutividad'] = df_resolutividad['Resolutividad'].apply(lambda x: f"{x:.2%}")
 
-    if not df_consolidado.empty:
-        df_consolidado[COLUMNA_FECHA] = pd.to_datetime(df_consolidado[COLUMNA_FECHA]).dt.date
-        cols_to_drop = ['Year', 'Semana_Num', 'WeekStartDate', 'WeekEndDate', 'WeekLabel']
-        df_consolidado = df_consolidado.drop(columns=[col for col in cols_to_drop if col in df_consolidado.columns])
+    df_kpi_resolutividad = pd.read_json(io.StringIO(kpi_resolutividad_json), orient='split')
+    df_kpi_cantidad = pd.read_json(io.StringIO(kpi_cantidad_json), orient='split')
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df_resolutividad.to_excel(writer, sheet_name='Ranking Resolutividad', index=False)
-        df_cantidad.to_excel(writer, sheet_name='Ranking Detalle', index=False)
-        df_consolidado.to_excel(writer, sheet_name='Consolidado Filtrado', index=False)
-    
-    output.seek(0)
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"ranking_kpi_completo_{timestamp}.xlsx"
-    
-    return dcc.send_bytes(output.read(), filename=filename)
+        start_row = 0
+        df_kpi_resolutividad.to_excel(writer, sheet_name='Ranking_KPI', startrow=start_row, index=False)
+        
+        start_row += len(df_kpi_resolutividad) + 2
+        
+        # Escribe la segunda tabla debajo
+        writer.sheets['Ranking_KPI'].write(start_row, 0, 'Volumen y Corregidas')
+        df_kpi_cantidad.to_excel(writer, sheet_name='Ranking_KPI', startrow=start_row + 1, index=False)
 
+    data = output.getvalue()
+    return dcc.send_bytes(data, f"Ranking_KPI_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
 
-# --- 6. INICIAR EL SERVIDOR ---
+@callback(
+    Output('filtro-mes', 'value'),
+    Output('filtro-quincena', 'value'),
+    Output('filtro-semana', 'value'),
+    Output('filtro-torre', 'value'),
+    Output('filtro-ejecutivo', 'value'),
+    Input('btn-limpiar', 'n_clicks'),
+    prevent_initial_call=True
+)
+def limpiar_filtros(n_clicks):
+    if n_clicks is None:
+        raise PreventUpdate
+    return [], None, [], [], []
+
 if __name__ == '__main__':
     app.run(debug=True)
